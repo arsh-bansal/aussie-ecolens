@@ -1,0 +1,44 @@
+# Models — never commit these (~470MB)
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.tfvars
+!*.tfvars.example
+
+# AWS / Azure deploy artifacts
+.aws-sam/
+samconfig.toml.local
+infra/aws/packaged.yaml
+infra/azure/.azure/
+
+# Local logs / scratch
+*.log
+scratch/
+tmp/
