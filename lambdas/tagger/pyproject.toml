@@ -1,0 +1,50 @@
+[project]
+name = "aussie-ecolens-tagger"
+version = "0.1.0"
+description = "AWS Lambda containerized image+video species tagging for Aussie EcoLens"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+authors = [
+    { name = "Arsh Bansal" },
+]
+license = { text = "MIT" }
+keywords = ["aws", "lambda", "ml", "wildlife", "megadetector", "speciesnet"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Private :: Do Not Upload",
+]
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "N",
+    "RUF",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-v --strict-markers"
