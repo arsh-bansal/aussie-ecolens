@@ -17,6 +17,8 @@ classifiers = [
 dependencies = [
     "boto3>=1.43.12",
     "megadetector>=10.0.20",
+    "onnx>=1.16",
+    "onnx2torch>=1.5",
     "opencv-python-headless>=4.13.0.92",
     "pillow>=12.2.0",
     "pydantic>=2.7",
@@ -58,3 +60,8 @@ warn_unused_ignores = true
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = "-v --strict-markers"
+
+[tool.uv]
+override-dependencies = [
+    "protobuf>=4.25",
+]
