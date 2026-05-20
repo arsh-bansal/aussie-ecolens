@@ -3,6 +3,12 @@ models/*.pt
 models/*.pth
 models/*.onnx
 
+# ML test datasets (from AussieEcoLense kit, not source — see models/README.md)
+models/test_images/
+models/images/
+models/cropped_images/
+
+
 # Python
 __pycache__/
 *.py[cod]
