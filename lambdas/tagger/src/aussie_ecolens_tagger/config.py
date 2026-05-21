@@ -100,6 +100,11 @@ class TaggerSettings(BaseSettings):
     # Operational flags.
     log_level: str = Field(default="INFO", description="Root structlog level")
 
+    # Operational toggle. When True, DynamoDBService logs the would-be
+    # PutItem payload but does not call AWS. Used for local dev and for
+    # the period before the DynamoDB table is provisioned.
+    dry_run: bool = Field(default=False, description="Skip DynamoDB writes")
+
     @field_validator("log_level")
     @classmethod
     def _validate_log_level(cls, v: str) -> str:
