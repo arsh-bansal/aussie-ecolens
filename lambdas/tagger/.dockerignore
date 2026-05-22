@@ -1,0 +1,44 @@
+# Docker build context exclusions for the Tagger Lambda image.
+# Anything not needed inside the container is excluded here to keep
+# the build context small (faster builds, faster ECR push).
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# Virtual environments (we install deps fresh inside the container)
+.venv/
+venv/
+
+# Linter / test caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local-only secrets and configuration
+.env
+.env.local
+.env.*.local
+
+# Git metadata (not needed inside the container)
+.git/
+.gitignore
+
+# Reference and dev-only files
+reference/
+smoke_test.py
+
+# Tests are not deployed; they run in CI separately
+tests/
+
+# Lambda RIE test artifacts and local outputs
+scripts/lambda_event.json
+*.log

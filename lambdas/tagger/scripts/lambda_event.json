@@ -1,0 +1,24 @@
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "ap-southeast-2",
+      "eventTime": "2026-05-22T13:30:00.000Z",
+      "eventName": "ObjectCreated:Put",
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "test-trigger",
+        "bucket": {
+          "name": "aussie-ecolens-uploads",
+          "arn": "arn:aws:s3:::aussie-ecolens-uploads"
+        },
+        "object": {
+          "key": "users/test/Casuarius_casuarius_1.JPG",
+          "size": 5745424,
+          "eTag": "test-etag"
+        }
+      }
+    }
+  ]
+}
