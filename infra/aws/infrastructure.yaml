@@ -1,0 +1,392 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Aussie EcoLens — S3 buckets, API Gateway, and the /uploads/check Lambda.
+  Owned by P1 (Adam). Depends on the aussie-ecolens-auth stack for Cognito IDs.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: aussie-ecolens
+  UserPoolId:
+    Type: String
+    Description: >
+      Cognito User Pool ID from the aussie-ecolens-auth stack output.
+      Example - ap-southeast-2_1XdbAo4mu.
+  UserPoolClientId:
+    Type: String
+    Description: >
+      Cognito App Client ID from the aussie-ecolens-auth stack output.
+  DevOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: Origin allowed for CORS during local development.
+  DynamoTableName:
+    Type: String
+    Default: ""
+    Description: >
+      Optional DynamoDB table name for dedup lookups. Leave blank until P3
+      creates the table; the Lambda treats every file as new in that case.
+
+Conditions:
+  HasDynamoTable: !Not [!Equals [!Ref DynamoTableName, ""]]
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # S3 buckets - uploads, thumbnails, models
+  # ---------------------------------------------------------------------------
+
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-uploads-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [PUT, GET, HEAD]
+            AllowedOrigins:
+              - !Ref DevOrigin
+            ExposedHeaders: [ETag]
+            MaxAge: 3000
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub "${UploadsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ThumbnailsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-thumbnails-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, HEAD]
+            AllowedOrigins:
+              - !Ref DevOrigin
+            MaxAge: 3000
+
+  ThumbnailsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ThumbnailsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ThumbnailsBucket.Arn
+              - !Sub "${ThumbnailsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ModelsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-models-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ModelsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ModelsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ModelsBucket.Arn
+              - !Sub "${ModelsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  # ---------------------------------------------------------------------------
+  # /uploads/check Lambda - IAM role
+  # ---------------------------------------------------------------------------
+
+  UploadsCheckRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-uploads-check-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PresignUploads
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${UploadsBucket.Arn}/*"
+        - !If
+          - HasDynamoTable
+          - PolicyName: DedupRead
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:Query
+                  Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}"
+          - !Ref AWS::NoValue
+
+  # ---------------------------------------------------------------------------
+  # /uploads/check Lambda - function
+  # ---------------------------------------------------------------------------
+
+  UploadsCheckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-uploads-check"
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt UploadsCheckRole.Arn
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          UPLOADS_BUCKET: !Ref UploadsBucket
+          DDB_TABLE: !Ref DynamoTableName
+          MAX_BYTES: "104857600"
+          PRESIGN_TTL_SECONDS: "300"
+      Code:
+        ZipFile: |
+          import json
+          import os
+          from urllib.parse import quote
+          import boto3
+          from botocore.config import Config
+
+          BUCKET = os.environ["UPLOADS_BUCKET"]
+          TABLE = os.environ.get("DDB_TABLE") or None
+          MAX_BYTES = int(os.environ.get("MAX_BYTES", "104857600"))
+          PRESIGN_TTL = int(os.environ.get("PRESIGN_TTL_SECONDS", "300"))
+
+          MIME_TO_EXT = {
+              "image/jpeg": "jpg",
+              "image/png": "png",
+              "image/webp": "webp",
+              "video/mp4": "mp4",
+              "video/quicktime": "mov",
+          }
+
+          s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
+          ddb = boto3.client("dynamodb") if TABLE else None
+
+          def _response(status, body):
+              return {
+                  "statusCode": status,
+                  "headers": {
+                      "Content-Type": "application/json",
+                      "Access-Control-Allow-Origin": "*",
+                  },
+                  "body": json.dumps(body),
+              }
+
+          def _user_sub(event):
+              try:
+                  return event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+              except (KeyError, TypeError):
+                  return None
+
+          def handler(event, _context):
+              params = event.get("queryStringParameters") or {}
+              sha = (params.get("hash") or "").lower()
+              mime = params.get("mime") or ""
+              size_str = params.get("size") or "0"
+
+              if len(sha) != 64 or not all(c in "0123456789abcdef" for c in sha):
+                  return _response(400, {"error": "hash must be a 64-char hex SHA-256"})
+
+              if mime not in MIME_TO_EXT:
+                  return _response(400, {
+                      "error": "unsupported mime",
+                      "allowed": list(MIME_TO_EXT.keys()),
+                  })
+
+              try:
+                  size = int(size_str)
+              except ValueError:
+                  return _response(400, {"error": "size must be an integer"})
+              if size <= 0 or size > MAX_BYTES:
+                  return _response(400, {
+                      "error": "size out of range",
+                      "max_bytes": MAX_BYTES,
+                  })
+
+              sub = _user_sub(event)
+              if not sub:
+                  return _response(401, {"error": "no user identity"})
+
+              if ddb:
+                  try:
+                      got = ddb.get_item(
+                          TableName=TABLE,
+                          Key={
+                              "pk": {"S": f"FILE#{sha}"},
+                              "sk": {"S": "METADATA"},
+                          },
+                      )
+                      if "Item" in got:
+                          item = got["Item"]
+                          return _response(200, {
+                              "already_uploaded": True,
+                              "existing_url": item.get("s3_url", {}).get("S"),
+                              "thumbnail_url": item.get("thumbnail_url", {}).get("S"),
+                          })
+                  except Exception as e:
+                      print(f"dedup check failed (proceeding): {e!r}")
+
+              ext = MIME_TO_EXT[mime]
+              key = f"{sub}/{sha}.{ext}"
+              url = s3.generate_presigned_url(
+                  ClientMethod="put_object",
+                  Params={
+                      "Bucket": BUCKET,
+                      "Key": key,
+                      "ContentType": mime,
+                  },
+                  ExpiresIn=PRESIGN_TTL,
+                  HttpMethod="PUT",
+              )
+
+              return _response(200, {
+                  "already_uploaded": False,
+                  "presigned_url": url,
+                  "key": key,
+                  "bucket": BUCKET,
+                  "expires_in": PRESIGN_TTL,
+                  "content_type": mime,
+              })
+
+  # ---------------------------------------------------------------------------
+  # API Gateway HTTP API + Cognito (JWT) authorizer
+  # ---------------------------------------------------------------------------
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${AppName}-api"
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref DevOrigin
+        AllowMethods: [GET, POST, DELETE, OPTIONS]
+        AllowHeaders: [content-type, authorization]
+        ExposeHeaders: [etag]
+        MaxAge: 600
+
+  CognitoAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      Name: cognito
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      IdentitySource:
+        - $request.header.Authorization
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClientId
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
+
+  UploadsCheckIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt UploadsCheckFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: "2.0"
+
+  UploadsCheckRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /uploads/check"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub "integrations/${UploadsCheckIntegration}"
+
+  UploadsCheckLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UploadsCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/uploads/check"
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+
+Outputs:
+  UploadsBucketName:
+    Value: !Ref UploadsBucket
+    Description: VITE_S3_UPLOADS_BUCKET
+  ThumbnailsBucketName:
+    Value: !Ref ThumbnailsBucket
+    Description: Thumbnails bucket for ML pipeline output
+  ModelsBucketName:
+    Value: !Ref ModelsBucket
+    Description: Models bucket for ML pipeline input
+  ApiBaseUrl:
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Description: VITE_API_BASE_URL
+  UploadsCheckRoleArn:
+    Value: !GetAtt UploadsCheckRole.Arn
+    Description: IAM role ARN for the /uploads/check Lambda
