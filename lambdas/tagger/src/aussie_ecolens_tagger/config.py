@@ -74,6 +74,27 @@ class TaggerSettings(BaseSettings):
     megadetector_version: str = Field(default="v5a", description="MegaDetector model version")
     speciesnet_version: str = Field(default="v1", description="SpeciesNet model version")
 
+    # S3 object keys for the model files inside models_bucket. Kept as
+    # explicit, overridable settings (not hardcoded in the handler) so a
+    # new model can be deployed by uploading to S3 and updating an env
+    # var — no code change or image rebuild required (assignment §4.1).
+    megadetector_s3_key: str = Field(
+        default="megadetector/v5a/mdv5a.pt",
+        description="S3 key of the MegaDetector .pt within models_bucket",
+    )
+    speciesnet_s3_key: str = Field(
+        default="speciesnet/v1/model.pt",
+        description="S3 key of the SpeciesNet .pt within models_bucket",
+    )
+
+    # When true, download model files from S3 to the local model paths on
+    # cold start. True in Lambda (models live in S3); set false locally
+    # where models are mounted/present on disk already.
+    load_models_from_s3: bool = Field(
+        default=False,
+        description="Download models from S3 on cold start (Lambda=true, local=false)",
+    )
+
     # Inference thresholds.
     # detection_threshold mirrors LOWER_CONF in the reference config.yaml.
     # species_threshold is our own product-level threshold (only tags

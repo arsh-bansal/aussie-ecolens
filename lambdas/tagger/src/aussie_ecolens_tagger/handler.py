@@ -51,7 +51,47 @@ log.info(
     species_threshold=settings.species_threshold,
     snip_size=settings.snip_size,
     dry_run=settings.dry_run,
+    load_models_from_s3=settings.load_models_from_s3,
 )
+
+_s3 = S3Service(region_name=settings.aws_region)
+
+
+def _ensure_models() -> None:
+    """Download model files from S3 to their local paths on cold start.
+
+    No-ops when settings.load_models_from_s3 is false (local dev, where
+    models are already on disk) or when a file already exists at the
+    target path (warm container reuse — /tmp persists across warm
+    invocations in the same Lambda execution environment).
+
+    Models are kept in S3 rather than baked into the image so a new model
+    can be rolled out by uploading to S3 and updating an env var, with no
+    code change or image rebuild (assignment §4.1).
+    """
+    if not settings.load_models_from_s3:
+        return
+
+    wanted = [
+        (settings.megadetector_s3_key, settings.megadetector_path),
+        (settings.speciesnet_s3_key, settings.speciesnet_path),
+    ]
+    for s3_key, dest in wanted:
+        if dest.exists():
+            log.info("model already present, skipping download", path=str(dest))
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        log.info(
+            "downloading model from s3",
+            bucket=settings.models_bucket,
+            key=s3_key,
+            dest=str(dest),
+        )
+        _s3.download(settings.models_bucket, s3_key, dest)
+
+
+# Download models BEFORE constructing the services that load them.
+_ensure_models()
 
 _detector = MegaDetectorService(
     model_path=settings.megadetector_path,
@@ -62,7 +102,6 @@ _classifier = SpeciesNetService(
     device="cpu",
     confidence_threshold=settings.species_threshold,
 )
-_s3 = S3Service(region_name=settings.aws_region)
 _db = DynamoDBService(
     table_name=settings.files_table,
     region_name=settings.aws_region,
@@ -167,3 +206,4 @@ def _parse_s3_record(record: dict[str, Any]) -> tuple[str, str]:
     bucket = s3["bucket"]["name"]
     key = urllib.parse.unquote_plus(s3["object"]["key"])
     return bucket, key
+    
