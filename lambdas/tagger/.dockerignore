@@ -42,3 +42,6 @@ tests/
 # Lambda RIE test artifacts and local outputs
 scripts/lambda_event.json
 *.log
+
+# Local inference validation script (dev-only, mirrors smoke_test.py)
+scripts/local_infer.py

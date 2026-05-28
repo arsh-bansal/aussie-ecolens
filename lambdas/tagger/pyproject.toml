@@ -25,6 +25,13 @@ dependencies = [
     "pydantic-settings>=2.14.1",
     "pyyaml>=6.0.3",
     "structlog>=25.5.0",
+    # torch/torchvision pulled transitively via megadetector, declared
+    # directly so [tool.uv.sources] can redirect to CPU-only index.
+    # Since PyTorch 2.11.0 (Mar 2026) the default aarch64 PyPI wheel
+    # bundles CUDA SBSA for Grace Hopper — Lambda Graviton2 has no GPU.
+    # Pinned to 2.12.x = our validated combo (smoke test 100% / 26 imgs).
+    "torch>=2.12,<2.13",
+    "torchvision>=0.27,<0.28",
     "tqdm>=4.67.3",
 ]
 
@@ -64,7 +71,17 @@ addopts = "-v --strict-markers"
 [tool.uv]
 override-dependencies = [
     "protobuf>=4.25",
+    "mkl ; sys_platform == 'never'",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
 
 [build-system]
 requires = ["hatchling"]
