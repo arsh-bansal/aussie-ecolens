@@ -57,18 +57,13 @@ RUN mkdir -p src/aussie_ecolens_tagger && \
 # --no-dev excludes pytest, ruff, mypy.
 RUN /uv sync --frozen --no-dev
 
-# Strip the GUI version of opencv that megadetector pulls in. We pin
-# opencv-python-headless ourselves; the full opencv-python adds ~100MB
-# of X11/Qt deps that cannot be used in Lambda anyway.
-RUN /build/.venv/bin/python -m pip uninstall -y opencv-python || true
-
-# Strip dev/visualization tooling that megadetector pulls transitively
-# but we do not use at runtime. Aggressive size reduction = faster
-# cold-start image pulls from ECR.
-RUN /build/.venv/bin/python -m pip uninstall -y \
-        seaborn matplotlib ipython jedi parso pexpect prompt-toolkit \
-        ptyprocess pure-eval stack-data tensorboard tensorboard-data-server \
-        wcwidth || true
+# NOTE: We deliberately do NOT strip megadetector's transitive deps.
+# An earlier attempt to remove dev/viz tooling (matplotlib, ipython, etc.)
+# broke megadetector's yolov5 import path setup — the packages are more
+# entangled with its runtime than their names suggest. The savings (~300MB
+# on a 2.6GB image) are not worth the fragility. The big win — removing the
+# 6.8GB CUDA stack — is handled at resolve time via the CPU-only torch index
+# (see pyproject.toml [tool.uv.sources]).
 
 # ============================================================================
 # Stage 2: runtime
