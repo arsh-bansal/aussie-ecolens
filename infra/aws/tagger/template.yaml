@@ -1,0 +1,213 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Aussie EcoLens - Tagger Lambda (write path).
+  Container-image Lambda triggered by S3 uploads. Runs MegaDetector +
+  SpeciesNet, writes species tags to DynamoDB. Models are lazy-loaded from
+  S3 at cold start (no model baked into the image, so models can be swapped
+  without rebuilding - assignment 4.1).
+
+# ---------------------------------------------------------------------------
+# Parameters - everything environment-specific is a parameter so the same
+# template deploys to any account/region without edits.
+# ---------------------------------------------------------------------------
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: aussie-ecolens
+    Description: Prefix for all resource names (must match IAM policy scoping).
+
+  ImageUri:
+    Type: String
+    Description: >
+      Full ECR image URI for the tagger, e.g.
+      247622885425.dkr.ecr.ap-southeast-2.amazonaws.com/aussie-ecolens-tagger:dev
+      Build and push with `make push` before deploying.
+
+  DetectionThreshold:
+    Type: String
+    Default: "0.4"
+    Description: MegaDetector confidence threshold (string; pydantic coerces to float).
+
+  SpeciesThreshold:
+    Type: String
+    Default: "0.4"
+    Description: SpeciesNet confidence threshold for persisting a tag (string; coerced to float).
+
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    Description: CloudWatch Logs retention for the Lambda log group.
+
+# ---------------------------------------------------------------------------
+# Globals - defaults applied to all SAM functions in this template.
+# ---------------------------------------------------------------------------
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 4096
+    Architectures:
+      - arm64
+
+Resources:
+  # -------------------------------------------------------------------------
+  # S3: uploads bucket (source media). Object-create events trigger the
+  # tagger. Account ID is appended for global-uniqueness of the bucket name.
+  # -------------------------------------------------------------------------
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # -------------------------------------------------------------------------
+  # S3: models registry bucket. Holds MegaDetector + SpeciesNet .pt files.
+  # Versioning is on so a model rollback is possible. The Lambda reads from
+  # here at cold start.
+  # -------------------------------------------------------------------------
+  ModelsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # -------------------------------------------------------------------------
+  # DynamoDB: file/tag records. Single-table design (pk=FILE#<key>,
+  # sk=METADATA). On-demand billing (PAY_PER_REQUEST) - no capacity to
+  # manage, scales to zero, ideal for spiky upload workloads. Streams are
+  # enabled for the downstream Replicator (DDB -> Cosmos) and Notifier
+  # (DDB -> SNS) Lambdas.
+  # -------------------------------------------------------------------------
+  FilesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectPrefix}-files-tagger"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # -------------------------------------------------------------------------
+  # CloudWatch Logs group for the Lambda, with explicit retention so logs
+  # don't accumulate (and cost) indefinitely. Named to match the function
+  # so SAM/Lambda write here automatically.
+  # -------------------------------------------------------------------------
+  TaggerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectPrefix}-tagger"
+      RetentionInDays: !Ref LogRetentionDays
+
+  # -------------------------------------------------------------------------
+  # The Tagger Lambda. Container image (PackageType: Image) from ECR.
+  # ImageConfig.Command points at the handler the Dockerfile CMD also sets.
+  # The S3 trigger and least-privilege policies are declared inline.
+  # -------------------------------------------------------------------------
+  TaggerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: TaggerLogGroup
+    Properties:
+      FunctionName: !Sub "${ProjectPrefix}-tagger"
+      PackageType: Image
+      ImageUri: !Ref ImageUri
+      ImageConfig:
+        Command:
+          - aussie_ecolens_tagger.handler.lambda_handler
+      EphemeralStorage:
+        Size: 2048
+      Environment:
+        Variables:
+          # Note: AWS_REGION is reserved and auto-set by the Lambda runtime;
+          # TaggerSettings.aws_region reads it (case-insensitive), so we do
+          # not (and cannot) set it here.
+          UPLOADS_BUCKET: !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+          MODELS_BUCKET: !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+          FILES_TABLE: !Sub "${ProjectPrefix}-files-tagger"
+          LOAD_MODELS_FROM_S3: "true"
+          MEGADETECTOR_PATH: /tmp/models/mdv5a.pt
+          SPECIESNET_PATH: /tmp/models/model.pt
+          MEGADETECTOR_S3_KEY: megadetector/v5a/mdv5a.pt
+          SPECIESNET_S3_KEY: speciesnet/v1/model.pt
+          DETECTION_THRESHOLD: !Ref DetectionThreshold
+          SPECIES_THRESHOLD: !Ref SpeciesThreshold
+          LOG_LEVEL: INFO
+          DRY_RUN: "false"
+      Policies:
+        # Least-privilege: only the specific actions on the specific
+        # resources this function touches. No wildcard service access.
+        - Statement:
+            - Sid: ReadUploads
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ProjectPrefix}-uploads-${AWS::AccountId}/*"
+            - Sid: ReadModels
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ProjectPrefix}-models-${AWS::AccountId}/*"
+            - Sid: WriteFilesTable
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt FilesTable.Arn
+      Events:
+        UploadCreated:
+          Type: S3
+          Properties:
+            Bucket: !Ref UploadsBucket
+            Events: s3:ObjectCreated:*
+
+# ---------------------------------------------------------------------------
+# Outputs - surfaced after deploy for quick reference and for other stacks
+# (read API, replicator) to import.
+# ---------------------------------------------------------------------------
+Outputs:
+  TaggerFunctionArn:
+    Description: ARN of the tagger Lambda.
+    Value: !GetAtt TaggerFunction.Arn
+
+  UploadsBucketName:
+    Description: Bucket where uploading an image triggers tagging.
+    Value: !Ref UploadsBucket
+
+  ModelsBucketName:
+    Description: Bucket to upload MegaDetector / SpeciesNet model files to.
+    Value: !Ref ModelsBucket
+
+  FilesTableName:
+    Description: DynamoDB table holding file/tag records.
+    Value: !Ref FilesTable
+
+  FilesTableStreamArn:
+    Description: DynamoDB Streams ARN (for the Replicator / Notifier Lambdas).
+    Value: !GetAtt FilesTable.StreamArn
