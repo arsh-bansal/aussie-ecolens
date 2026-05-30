@@ -44,6 +44,7 @@ help:
 build: ## Build the Lambda container image for linux/arm64
 	docker buildx build \
 		--platform=$(PLATFORM) \
+		--provenance=false \
 		--tag $(IMAGE_NAME):$(IMAGE_TAG) \
 		--load \
 		.
@@ -52,8 +53,9 @@ build: ## Build the Lambda container image for linux/arm64
 build-nocache: ## Rebuild without any cached layers (slow, for debugging)
 	docker buildx build \
 		--platform=$(PLATFORM) \
-		--tag $(IMAGE_NAME):$(IMAGE_TAG) \
+		--provenance=false \
 		--no-cache \
+		--tag $(IMAGE_NAME):$(IMAGE_TAG) \
 		--load \
 		.
 
@@ -133,3 +135,4 @@ push: build ecr-login ## Tag and push the image to ECR
 	docker tag $(IMAGE_NAME):$(IMAGE_TAG) \
 		$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPO):$(IMAGE_TAG)
 	docker push $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPO):$(IMAGE_TAG)
+	
