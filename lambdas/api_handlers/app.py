@@ -20,12 +20,14 @@ from search_handler    import search_bp
 from thumbnail_handler import thumbnail_bp
 from query_file_handler import query_file_bp
 from tags_handler      import tags_bp
+from files_handler import files_bp
 from delete_handler    import delete_bp
 
 app = Flask(__name__)
 CORS(app)   # Allow Shaurya's frontend to call the API cross-origin
 
 # Register all route blueprints
+app.register_blueprint(files_bp)
 app.register_blueprint(search_bp)
 app.register_blueprint(thumbnail_bp)
 app.register_blueprint(query_file_bp)
