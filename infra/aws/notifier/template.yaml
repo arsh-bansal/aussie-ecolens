@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Aussie EcoLens - Notifier Lambda (tag-based notifications).
+  Reads the shared files table's DynamoDB stream and publishes one SNS
+  message per detected species. SNS subscription filter policies route
+  each species to the users watching it, so subscribers only receive
+  emails for their watched tags (assignment 2.3.3).
+
+  This stack creates the SNS topic, the Lambda, its least-privilege role,
+  its log group, and the stream event source mapping. The DynamoDB table
+  (and its stream) is owned by the data/API stack and referenced by ARN.
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: aussie-ecolens
+    Description: Prefix for resource names (must match IAM policy scoping).
+
+  FilesTableStreamArn:
+    Type: String
+    Description: >
+      DynamoDB Streams ARN of the shared files table (an Output of the
+      data/API stack). The notifier's event source. Required.
+
+  MinCount:
+    Type: String
+    Default: "1"
+    Description: Minimum species count in a file to notify on (coerced to int).
+
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    Description: CloudWatch Logs retention for the Lambda log group.
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.12
+    Architectures:
+      - arm64
+
+Resources:
+
+  # The topic every tag notification is published to. Subscribers attach a
+  # FilterPolicy on the "species" message attribute so they only receive
+  # the tags they watch. (Subscriptions are created per-user out of band -
+  # e.g. by a subscribe endpoint or CLI - not in this stack.)
+  TagNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectPrefix}-tag-notifications"
+      DisplayName: Aussie EcoLens tag alerts
+
+  NotifierLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectPrefix}-notifier"
+      RetentionInDays: !Ref LogRetentionDays
+
+  NotifierFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: NotifierLogGroup
+    Properties:
+      FunctionName: !Sub "${ProjectPrefix}-notifier"
+      CodeUri: ../
+      Handler: aussie_ecolens_notifier.handler.lambda_handler
+      Environment:
+        Variables:
+          # AWS_REGION is reserved + auto-set by the runtime.
+          TOPIC_ARN: !Ref TagNotificationsTopic
+          SPECIES_ATTRIBUTE: species
+          MIN_COUNT: !Ref MinCount
+          LOG_LEVEL: INFO
+          DRY_RUN: "false"
+      Policies:
+        # Least-privilege (assignment 1.3): publish to our topic, read the
+        # specific DDB stream, write own logs. No wildcards.
+        - Statement:
+            - Sid: PublishTagNotifications
+              Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref TagNotificationsTopic
+            - Sid: ReadFilesTableStream
+              Effect: Allow
+              Action:
+                - dynamodb:GetRecords
+                - dynamodb:GetShardIterator
+                - dynamodb:DescribeStream
+                - dynamodb:ListStreams
+              Resource: !Ref FilesTableStreamArn
+      Events:
+        FilesTableStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !Ref FilesTableStreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            MaximumRetryAttempts: 3
+            BisectBatchOnFunctionError: true
+            # Per-record failure reporting: only failed records are retried,
+            # not the whole batch (matches the handler's batchItemFailures).
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+Outputs:
+  TagNotificationsTopicArn:
+    Description: SNS topic ARN. Subscribe with a FilterPolicy on "species".
+    Value: !Ref TagNotificationsTopic
+
+  NotifierFunctionArn:
+    Description: ARN of the notifier Lambda.
+    Value: !GetAtt NotifierFunction.Arn
