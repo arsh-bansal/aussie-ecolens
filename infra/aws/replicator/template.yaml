@@ -57,7 +57,6 @@ Globals:
       - arm64
 
 Resources:
-
   ReplicatorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -67,9 +66,15 @@ Resources:
   ReplicatorFunction:
     Type: AWS::Serverless::Function
     DependsOn: ReplicatorLogGroup
+    Metadata:
+      # sam build packages the code + pip-installs requirements.txt (incl.
+      # azure-cosmos) into the artifact. Without this, deps are missing.
+      BuildMethod: python3.12
     Properties:
       FunctionName: !Sub "${ProjectPrefix}-replicator"
-      CodeUri: ../
+      # Points at the package root (src/): the aussie_ecolens_replicator
+      # package plus its requirements.txt (azure-cosmos, pydantic, ...).
+      CodeUri: ../../../lambdas/replicator/src
       Handler: aussie_ecolens_replicator.handler.lambda_handler
       Environment:
         Variables:

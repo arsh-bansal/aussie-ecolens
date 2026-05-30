@@ -42,7 +42,6 @@ Globals:
       - arm64
 
 Resources:
-
   # The topic every tag notification is published to. Subscribers attach a
   # FilterPolicy on the "species" message attribute so they only receive
   # the tags they watch. (Subscriptions are created per-user out of band -
@@ -62,9 +61,15 @@ Resources:
   NotifierFunction:
     Type: AWS::Serverless::Function
     DependsOn: NotifierLogGroup
+    Metadata:
+      # sam build packages the code + pip-installs requirements.txt into the
+      # artifact. Without this, sam deploy zips only loose files (no deps).
+      BuildMethod: python3.12
     Properties:
       FunctionName: !Sub "${ProjectPrefix}-notifier"
-      CodeUri: ../
+      # Points at the package root (src/), which contains both the
+      # aussie_ecolens_notifier package and its requirements.txt.
+      CodeUri: ../../../lambdas/notifier/src
       Handler: aussie_ecolens_notifier.handler.lambda_handler
       Environment:
         Variables:
