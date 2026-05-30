@@ -14,7 +14,7 @@
 
 IMAGE_NAME       := aussie-ecolens-tagger
 IMAGE_TAG        := dev
-PLATFORM         := linux/arm64
+PLATFORM         := linux/amd64
 CONTAINER_NAME   := tagger-rie-local
 RIE_PORT         := 9000
 

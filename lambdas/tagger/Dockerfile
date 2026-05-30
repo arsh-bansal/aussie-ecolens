@@ -28,7 +28,7 @@
 # ============================================================================
 # Stage 1: builder
 # ============================================================================
-FROM --platform=linux/arm64 public.ecr.aws/lambda/python:3.12 AS builder
+FROM public.ecr.aws/lambda/python:3.12 AS builder
 
 # Install build deps that some Python wheels compile from source.
 # microdnf is symlinked as dnf on AL2023.
@@ -68,7 +68,7 @@ RUN /uv sync --frozen --no-dev
 # ============================================================================
 # Stage 2: runtime
 # ============================================================================
-FROM --platform=linux/arm64 public.ecr.aws/lambda/python:3.12
+FROM public.ecr.aws/lambda/python:3.12
 
 # Copy ONLY the resolved venv from the builder. The build toolchain
 # (gcc, make, uv) is left behind in the discarded builder stage.

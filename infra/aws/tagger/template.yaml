@@ -1,14 +1,18 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Aussie EcoLens - Tagger Lambda (write path).
-  Container-image Lambda that runs MegaDetector + SpeciesNet on uploaded
-  media and writes species tags to the shared DynamoDB table. Models are
-  lazy-loaded from S3 at cold start (no model baked into the image, so they
-  swap without a rebuild - assignment 4.1).
+  Aussie EcoLens - Tagger Lambda (write path) + Query-Tagger Lambda.
+  Container-image Lambdas (one image, two entry points):
+    - Tagger: triggered by S3 uploads, runs MegaDetector + SpeciesNet and
+      writes species tags to the shared DynamoDB table.
+    - Query-Tagger: synchronously invoked by the query API for the
+      find-by-uploaded-file feature (2.2.3). Same ML, but stateless -
+      returns tags and persists nothing.
+  Models are lazy-loaded from S3 at cold start (no model baked into the
+  image, so they swap without a rebuild - assignment 4.1).
 
-  This stack creates ONLY tagger-specific resources (the function, its
-  execution role, its log group). The S3 buckets are owned by the
+  This stack creates ONLY tagger-specific resources (functions, their
+  execution roles, their log groups). The S3 buckets are owned by the
   aussie-ecolens-infra stack and the DynamoDB table by the data/API owner;
   both are referenced here by name, never created.
 
@@ -89,7 +93,7 @@ Globals:
     Timeout: 120
     MemorySize: !Ref MemorySize
     Architectures:
-      - arm64
+      - x86_64
 
 Resources:
   # CloudWatch Logs group, explicit retention. Named to match the function
@@ -136,6 +140,8 @@ Resources:
           SPECIESNET_S3_KEY: !Ref SpeciesnetS3Key
           DETECTION_THRESHOLD: !Ref DetectionThreshold
           SPECIES_THRESHOLD: !Ref SpeciesThreshold
+          USE_NNPACK: "0"
+          MPLCONFIGDIR: /tmp/matplotlib
           LOG_LEVEL: INFO
           DRY_RUN: "false"
       Policies:
@@ -172,6 +178,77 @@ Resources:
                 - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}"
                 - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}/index/*"
 
+  # ---- Query-Tagger ---------------------------------------------------------
+  # Same container image, different entry point (query_handler). Invoked
+  # synchronously by the query API for find-by-uploaded-file (2.2.3). It is
+  # STATELESS: it tags a transient image and returns the counts, writing
+  # nothing - so its role intentionally omits DynamoDB (tighter than the
+  # tagger's, a deliberate least-privilege boundary for 1.3).
+  QueryTaggerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectPrefix}-query-tagger"
+      RetentionInDays: !Ref LogRetentionDays
+
+  QueryTaggerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: QueryTaggerLogGroup
+    Properties:
+      FunctionName: !Sub "${ProjectPrefix}-query-tagger"
+      PackageType: Image
+      ImageUri: !Ref ImageUri
+      ImageConfig:
+        Command:
+          - aussie_ecolens_tagger.query_handler.lambda_handler
+      EphemeralStorage:
+        Size: 2048
+      Environment:
+        Variables:
+          # No FILES_TABLE / no uploads-write: this function never persists.
+          MODELS_BUCKET: !If
+            - ModelsNameProvided
+            - !Ref ModelsBucketName
+            - !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+          UPLOADS_BUCKET: !If
+            - UploadsNameProvided
+            - !Ref UploadsBucketName
+            - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+          LOAD_MODELS_FROM_S3: "true"
+          MEGADETECTOR_PATH: /tmp/models/mdv5a.pt
+          SPECIESNET_PATH: /tmp/models/model.pt
+          MEGADETECTOR_S3_KEY: !Ref MegadetectorS3Key
+          SPECIESNET_S3_KEY: !Ref SpeciesnetS3Key
+          DETECTION_THRESHOLD: !Ref DetectionThreshold
+          SPECIES_THRESHOLD: !Ref SpeciesThreshold
+          USE_NNPACK: "0"
+          MPLCONFIGDIR: /tmp/matplotlib
+          LOG_LEVEL: INFO
+          DRY_RUN: "false"
+      Policies:
+        # Tighter than the tagger: read models (lazy load) + uploads (the
+        # optional S3-key input path), write own logs. NO DynamoDB.
+        - Statement:
+            - Sid: ReadModels
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub
+                - "arn:aws:s3:::${Bucket}/*"
+                - Bucket: !If
+                    - ModelsNameProvided
+                    - !Ref ModelsBucketName
+                    - !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+            - Sid: ReadUploads
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub
+                - "arn:aws:s3:::${Bucket}/*"
+                - Bucket: !If
+                    - UploadsNameProvided
+                    - !Ref UploadsBucketName
+                    - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+
 Outputs:
   TaggerFunctionArn:
     Description: ARN of the tagger Lambda (needed to wire the S3 trigger).
@@ -180,6 +257,16 @@ Outputs:
   TaggerFunctionName:
     Description: Name of the tagger Lambda.
     Value: !Ref TaggerFunction
+
+  QueryTaggerFunctionArn:
+    Description: ARN of the query-tagger Lambda (find-by-uploaded-file).
+    Value: !GetAtt QueryTaggerFunction.Arn
+
+  QueryTaggerFunctionName:
+    Description: >
+      Name of the query-tagger Lambda. Give this to the query API owner as
+      their TAGGER_LAMBDA_NAME for the /query-file integration.
+    Value: !Ref QueryTaggerFunction
 
   ReferencedUploadsBucket:
     Description: Uploads bucket the tagger reads from.
