@@ -23,90 +23,34 @@ from typing import Any
 
 import structlog
 
+from aussie_ecolens_tagger import _runtime
 from aussie_ecolens_tagger.config import settings
 from aussie_ecolens_tagger.domain.pipeline import tag_image
 from aussie_ecolens_tagger.exceptions import TaggerError
-from aussie_ecolens_tagger.logging import configure_logging, get_logger
+from aussie_ecolens_tagger.logging import get_logger
 from aussie_ecolens_tagger.services.dynamodb import DynamoDBService
-from aussie_ecolens_tagger.services.megadetector import MegaDetectorService
-from aussie_ecolens_tagger.services.s3 import S3Service
-from aussie_ecolens_tagger.services.speciesnet import SpeciesNetService
 
 
 # -----------------------------------------------------------------------------
-# Cold-start singletons. Constructed once per Lambda container, reused
-# across every warm invocation. Loading the ML models is the single
-# largest cold-start cost (~3-5s); doing it module-level absorbs the
-# cost into AWS's accounting of cold-start latency only.
+# Cold-start singletons. The expensive, shared setup (model download +
+# detector/classifier construction) lives in _runtime, imported once per
+# container and reused across warm invocations. The DynamoDB service is
+# specific to this handler (the query handler does not persist), so it is
+# constructed here.
 # -----------------------------------------------------------------------------
 
-configure_logging()
 log = get_logger(__name__)
 
-log.info(
-    "tagger cold start",
-    aws_region=settings.aws_region,
-    files_table=settings.files_table,
-    detection_threshold=settings.detection_threshold,
-    species_threshold=settings.species_threshold,
-    snip_size=settings.snip_size,
-    dry_run=settings.dry_run,
-    load_models_from_s3=settings.load_models_from_s3,
-)
-
-_s3 = S3Service(region_name=settings.aws_region)
-
-
-def _ensure_models() -> None:
-    """Download model files from S3 to their local paths on cold start.
-
-    No-ops when settings.load_models_from_s3 is false (local dev, where
-    models are already on disk) or when a file already exists at the
-    target path (warm container reuse — /tmp persists across warm
-    invocations in the same Lambda execution environment).
-
-    Models are kept in S3 rather than baked into the image so a new model
-    can be rolled out by uploading to S3 and updating an env var, with no
-    code change or image rebuild (assignment §4.1).
-    """
-    if not settings.load_models_from_s3:
-        return
-
-    wanted = [
-        (settings.megadetector_s3_key, settings.megadetector_path),
-        (settings.speciesnet_s3_key, settings.speciesnet_path),
-    ]
-    for s3_key, dest in wanted:
-        if dest.exists():
-            log.info("model already present, skipping download", path=str(dest))
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        log.info(
-            "downloading model from s3",
-            bucket=settings.models_bucket,
-            key=s3_key,
-            dest=str(dest),
-        )
-        _s3.download(settings.models_bucket, s3_key, dest)
-
-
-# Download models BEFORE constructing the services that load them.
-_ensure_models()
-
-_detector = MegaDetectorService(
-    model_path=settings.megadetector_path,
-    detection_threshold=settings.detection_threshold,
-)
-_classifier = SpeciesNetService(
-    model_path=settings.speciesnet_path,
-    device="cpu",
-    confidence_threshold=settings.species_threshold,
-)
+_s3 = _runtime.s3
+_detector = _runtime.detector
+_classifier = _runtime.classifier
 _db = DynamoDBService(
     table_name=settings.files_table,
     region_name=settings.aws_region,
     dry_run=settings.dry_run,
 )
+
+log.info("tagger handler ready", files_table=settings.files_table, dry_run=settings.dry_run)
 
 
 # -----------------------------------------------------------------------------
@@ -206,4 +150,3 @@ def _parse_s3_record(record: dict[str, Any]) -> tuple[str, str]:
     bucket = s3["bucket"]["name"]
     key = urllib.parse.unquote_plus(s3["object"]["key"])
     return bucket, key
-    

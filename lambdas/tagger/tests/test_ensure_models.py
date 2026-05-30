@@ -68,21 +68,21 @@ def handler_with_fakes(monkeypatch, tmp_path):
     )
 
     # Ensure a clean import of the handler each test.
-    sys.modules.pop("aussie_ecolens_tagger.handler", None)
+    sys.modules.pop("aussie_ecolens_tagger._runtime", None)
 
-    import aussie_ecolens_tagger.handler as handler  # noqa: E402
+    import aussie_ecolens_tagger._runtime as runtime  # noqa: E402
 
-    yield handler, downloads
+    yield runtime, downloads
 
-    sys.modules.pop("aussie_ecolens_tagger.handler", None)
+    sys.modules.pop("aussie_ecolens_tagger._runtime", None)
 
 
 def test_ensure_models_noop_when_disabled(handler_with_fakes, monkeypatch):
-    handler, downloads = handler_with_fakes
+    runtime, downloads = handler_with_fakes
     downloads.clear()
-    monkeypatch.setattr(handler.settings, "load_models_from_s3", False)
+    monkeypatch.setattr(runtime.settings, "load_models_from_s3", False)
 
-    handler._ensure_models()
+    runtime._ensure_models()
 
     assert downloads == []  # nothing downloaded when disabled
 
@@ -90,20 +90,20 @@ def test_ensure_models_noop_when_disabled(handler_with_fakes, monkeypatch):
 def test_ensure_models_downloads_when_missing(
     handler_with_fakes, monkeypatch, tmp_path
 ):
-    handler, downloads = handler_with_fakes
+    runtime, downloads = handler_with_fakes
     downloads.clear()
 
     md_path = tmp_path / "models" / "mdv5a.pt"
     sn_path = tmp_path / "models" / "model.pt"
 
-    monkeypatch.setattr(handler.settings, "load_models_from_s3", True)
-    monkeypatch.setattr(handler.settings, "models_bucket", "test-models")
-    monkeypatch.setattr(handler.settings, "megadetector_s3_key", "md/mdv5a.pt")
-    monkeypatch.setattr(handler.settings, "speciesnet_s3_key", "sn/model.pt")
-    monkeypatch.setattr(handler.settings, "megadetector_path", md_path)
-    monkeypatch.setattr(handler.settings, "speciesnet_path", sn_path)
+    monkeypatch.setattr(runtime.settings, "load_models_from_s3", True)
+    monkeypatch.setattr(runtime.settings, "models_bucket", "test-models")
+    monkeypatch.setattr(runtime.settings, "megadetector_s3_key", "md/mdv5a.pt")
+    monkeypatch.setattr(runtime.settings, "speciesnet_s3_key", "sn/model.pt")
+    monkeypatch.setattr(runtime.settings, "megadetector_path", md_path)
+    monkeypatch.setattr(runtime.settings, "speciesnet_path", sn_path)
 
-    handler._ensure_models()
+    runtime._ensure_models()
 
     # Both models downloaded, parent dirs created, files exist.
     assert len(downloads) == 2
@@ -116,7 +116,7 @@ def test_ensure_models_downloads_when_missing(
 def test_ensure_models_skips_present_files(
     handler_with_fakes, monkeypatch, tmp_path
 ):
-    handler, downloads = handler_with_fakes
+    runtime, downloads = handler_with_fakes
     downloads.clear()
 
     md_path = tmp_path / "models" / "mdv5a.pt"
@@ -125,16 +125,15 @@ def test_ensure_models_skips_present_files(
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_bytes(b"already-here")
 
-    monkeypatch.setattr(handler.settings, "load_models_from_s3", True)
-    monkeypatch.setattr(handler.settings, "models_bucket", "test-models")
-    monkeypatch.setattr(handler.settings, "megadetector_s3_key", "md/mdv5a.pt")
-    monkeypatch.setattr(handler.settings, "speciesnet_s3_key", "sn/model.pt")
-    monkeypatch.setattr(handler.settings, "megadetector_path", md_path)
-    monkeypatch.setattr(handler.settings, "speciesnet_path", sn_path)
+    monkeypatch.setattr(runtime.settings, "load_models_from_s3", True)
+    monkeypatch.setattr(runtime.settings, "models_bucket", "test-models")
+    monkeypatch.setattr(runtime.settings, "megadetector_s3_key", "md/mdv5a.pt")
+    monkeypatch.setattr(runtime.settings, "speciesnet_s3_key", "sn/model.pt")
+    monkeypatch.setattr(runtime.settings, "megadetector_path", md_path)
+    monkeypatch.setattr(runtime.settings, "speciesnet_path", sn_path)
 
-    handler._ensure_models()
+    runtime._ensure_models()
 
     # Only the missing SpeciesNet file is downloaded.
     assert len(downloads) == 1
     assert downloads[0][1] == "sn/model.pt"
-    
