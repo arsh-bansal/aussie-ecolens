@@ -1,0 +1,19 @@
+# Aussie EcoLens — Query API dependencies
+# Python 3.12
+
+# Web framework
+flask==3.1.0
+flask-cors==5.0.0
+
+# Azure Cosmos DB
+azure-cosmos==4.7.0
+
+# AWS (S3 delete, Lambda invoke for /query-file, Cognito token validation)
+boto3==1.35.0
+PyJWT[crypto]==2.9.0
+
+# Lambda adapter
+aws-wsgi==0.2.2
+
+# Note: torch, megadetector, opencv etc are NOT here.
+# ML inference for /query-file is handled by Arsh's tag-only Lambda.

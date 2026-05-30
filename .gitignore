@@ -42,3 +42,4 @@ infra/azure/.azure/
 *.log
 scratch/
 tmp/
+lambdas/api_handlers/venv/

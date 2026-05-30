@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Aussie EcoLens — Query API (Rachana)
+  Read side of the CQRS stack: Flask/Lambda querying Azure Cosmos DB.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: aussie-ecolens
+  CosmosEndpoint:
+    Type: String
+  CosmosKey:
+    Type: String
+    NoEcho: true
+  CosmosDatabase:
+    Type: String
+    Default: aussie-ecolens
+  CosmosContainer:
+    Type: String
+    Default: files
+  CognitoUserPoolId:
+    Type: String
+  CognitoClientId:
+    Type: String
+  TaggerLambdaName:
+    Type: String
+    Description: >
+      Name of Arsh's tag-only Lambda for /query-file (2.2.3 integration).
+      Leave empty until Arsh deploys it.
+    Default: ""
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 60
+    MemorySize: 512
+    Environment:
+      Variables:
+        COSMOS_ENDPOINT:       !Ref CosmosEndpoint
+        COSMOS_KEY:            !Ref CosmosKey
+        COSMOS_DATABASE:       !Ref CosmosDatabase
+        COSMOS_CONTAINER:      !Ref CosmosContainer
+        COGNITO_USER_POOL_ID:  !Ref CognitoUserPoolId
+        COGNITO_CLIENT_ID:     !Ref CognitoClientId
+        AWS_REGION_NAME:       !Ref AWS::Region
+        S3_BUCKET_NAME:        aussie-ecolens-uploads-247622885425
+        TAGGER_LAMBDA_NAME:    !Ref TaggerLambdaName
+
+Resources:
+  QueryApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins: ["*"]
+        AllowMethods: ["GET", "POST", "DELETE", "OPTIONS"]
+        AllowHeaders: ["Authorization", "Content-Type"]
+
+  QueryApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-query-api"
+      CodeUri: ./
+      Handler: lambda_handler.handler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: aussie-ecolens-uploads-247622885425
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TaggerLambdaName}"
+      Events:
+        Search:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref QueryApi
+            Path: /search
+            Method: GET
+        Thumbnail:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref QueryApi
+            Path: /thumbnail
+            Method: GET
+        QueryFile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref QueryApi
+            Path: /query-file
+            Method: POST
+        BulkTags:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref QueryApi
+            Path: /tags
+            Method: POST
+        DeleteFiles:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref QueryApi
+            Path: /files
+            Method: DELETE
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref QueryApi
+            Path: /health
+            Method: GET
+
+Outputs:
+  QueryApiUrl:
+    Value: !Sub "https://${QueryApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
