@@ -32,6 +32,7 @@ from typing import Any
 
 import boto3
 
+from aussie_ecolens_tagger.config import settings
 from aussie_ecolens_tagger.domain.models import TagResult
 from aussie_ecolens_tagger.exceptions import PersistenceError
 from aussie_ecolens_tagger.logging import get_logger
@@ -145,6 +146,19 @@ class DynamoDBService:
             name = common_name(latin)
             common_tags[name] = common_tags.get(name, 0) + count
 
+        # thumbnail_url: for IMAGES, point at the deterministic thumbnail key
+        # (s3://<thumbnails_bucket>/<sha>.jpg) that the thumbnail Lambda writes.
+        # The path is a pure function of the sha, so we set it here without any
+        # coordination with that Lambda (it just has to create the object). For
+        # VIDEOS there is no thumbnail (queries return the full video URL), so
+        # the field stays NULL.
+        if file_type == "image":
+            thumbnail_av: dict[str, Any] = {
+                "S": f"s3://{settings.thumbnails_bucket}/{sha}.jpg"
+            }
+        else:
+            thumbnail_av = {"NULL": True}
+
         return {
             "pk": {"S": f"FILE#{sha}"},
             "sk": {"S": "METADATA"},
@@ -152,7 +166,7 @@ class DynamoDBService:
             "checksum": {"S": sha},
             "file_type": {"S": file_type},
             "s3_url": {"S": f"s3://{result.s3_bucket}/{result.s3_key}"},
-            "thumbnail_url": {"NULL": True},
+            "thumbnail_url": thumbnail_av,
             "tags": {
                 "M": {name: {"N": str(c)} for name, c in common_tags.items()}
             },
@@ -167,4 +181,3 @@ class DynamoDBService:
 def _iso_utc_now() -> str:
     """Current UTC time as an ISO-8601 string suitable for DynamoDB."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    

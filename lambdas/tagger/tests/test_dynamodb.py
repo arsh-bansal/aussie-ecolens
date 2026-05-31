@@ -83,8 +83,17 @@ class TestToItem:
         )
         assert item["s3_url"]["S"] == "s3://aussie-ecolens-uploads-123/u1/x.JPG"
 
-    def test_thumbnail_url_is_null(self) -> None:
-        item = DynamoDBService._to_item(_result("u1/x.JPG", {"Bos_taurus": 1}))
+    def test_thumbnail_url_set_for_images(self) -> None:
+        # Images get a deterministic thumbnail URL derived from the sha.
+        item = DynamoDBService._to_item(_result("u1/abc123.JPG", {"Bos_taurus": 1}))
+        assert item["file_type"]["S"] == "image"
+        assert item["thumbnail_url"]["S"].startswith("s3://")
+        assert item["thumbnail_url"]["S"].endswith("/abc123.jpg")
+
+    def test_thumbnail_url_null_for_videos(self) -> None:
+        # Videos have no thumbnail (queries return the full video URL).
+        item = DynamoDBService._to_item(_result("u1/clip.mp4", {"Bos_taurus": 1}))
+        assert item["file_type"]["S"] == "video"
         assert item["thumbnail_url"] == {"NULL": True}
 
     def test_empty_tags_still_writes_record(self) -> None:
@@ -103,4 +112,3 @@ class TestToItem:
         )
         # Single mapping here; assert the count survived translation.
         assert item["tags"]["M"]["Southern Cassowary"]["N"] == "1"
-        

@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "aussie-ecolens-thumbnail"
+resolve_s3 = true
+s3_prefix = "aussie-ecolens-thumbnail"
+region = "ap-southeast-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "ProjectPrefix=\"aussie-ecolens\" UploadsBucketName=\"\" ThumbnailsBucketName=\"\" MaxEdge=\"320\" JpegQuality=\"80\" LogRetentionDays=\"14\""
+image_repositories = []
+
+[default.global.parameters]
+region = "ap-southeast-2"

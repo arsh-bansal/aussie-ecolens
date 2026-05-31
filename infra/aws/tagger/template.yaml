@@ -129,6 +129,7 @@ Resources:
             - ModelsNameProvided
             - !Ref ModelsBucketName
             - !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+          THUMBNAILS_BUCKET: !Sub "${ProjectPrefix}-thumbnails-${AWS::AccountId}"
           FILES_TABLE: !Ref FilesTableName
           LOAD_MODELS_FROM_S3: "true"
           MEGADETECTOR_PATH: /tmp/models/mdv5a.pt
@@ -250,6 +251,7 @@ Resources:
             - ModelsNameProvided
             - !Ref ModelsBucketName
             - !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+          THUMBNAILS_BUCKET: !Sub "${ProjectPrefix}-thumbnails-${AWS::AccountId}"
           UPLOADS_BUCKET: !If
             - UploadsNameProvided
             - !Ref UploadsBucketName
