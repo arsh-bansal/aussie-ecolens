@@ -75,18 +75,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     request_id = getattr(context, "aws_request_id", "local")
     structlog.contextvars.bind_contextvars(request_id=request_id)
 
-    records = event.get("Records", [])
-    log.info("invocation start", n_records=len(records))
+    pairs = _extract_bucket_keys(event)
+    log.info("invocation start", n_records=len(pairs))
 
     summaries: list[dict[str, Any]] = []
-    for record in records:
-        try:
-            bucket, key = _parse_s3_record(record)
-        except (KeyError, ValueError) as e:
-            log.error("malformed s3 record", error=str(e))
-            summaries.append({"error": f"malformed record: {e}"})
-            continue
-
+    for bucket, key in pairs:
         summary = _process_one(bucket, key)
         summaries.append(summary)
 
@@ -140,13 +133,50 @@ def _process_one(bucket: str, key: str) -> dict[str, Any]:
 # -----------------------------------------------------------------------------
 
 
-def _parse_s3_record(record: dict[str, Any]) -> tuple[str, str]:
-    """Extract (bucket, key) from a single S3 event record.
+def _extract_bucket_keys(event: dict[str, Any]) -> list[tuple[str, str]]:
+    """Normalize either supported event shape into (bucket, key) pairs.
 
-    S3 url-encodes keys with special characters (spaces, plus signs);
-    we unquote so downstream code sees the canonical form.
+    The tagger can be triggered two ways and must handle both:
+
+    1. EventBridge "Object Created" (the deployed trigger): a single event
+       with the bucket/object under ``detail``::
+
+           {"detail-type": "Object Created",
+            "detail": {"bucket": {"name": ...}, "object": {"key": ...}}}
+
+    2. Direct S3 notification (legacy / fallback): a ``Records`` array, each
+       with an ``s3`` envelope::
+
+           {"Records": [{"s3": {"bucket": {"name": ...},
+                                "object": {"key": ...}}}]}
+
+    Keys are url-decoded (S3 encodes spaces/plus signs) so downstream code
+    sees the canonical key. Malformed entries are logged and skipped rather
+    than aborting the whole invocation.
     """
-    s3 = record["s3"]
-    bucket = s3["bucket"]["name"]
-    key = urllib.parse.unquote_plus(s3["object"]["key"])
-    return bucket, key
+    pairs: list[tuple[str, str]] = []
+
+    # EventBridge shape: a single object-created event with a "detail" object.
+    if "detail" in event and "Records" not in event:
+        try:
+            detail = event["detail"]
+            bucket = detail["bucket"]["name"]
+            key = urllib.parse.unquote_plus(detail["object"]["key"])
+            pairs.append((bucket, key))
+        except (KeyError, TypeError) as e:
+            log.error("malformed eventbridge event", error=str(e))
+        return pairs
+
+    # S3-notification shape: a "Records" array of s3 envelopes.
+    for record in event.get("Records", []):
+        try:
+            s3 = record["s3"]
+            bucket = s3["bucket"]["name"]
+            key = urllib.parse.unquote_plus(s3["object"]["key"])
+            pairs.append((bucket, key))
+        except (KeyError, TypeError) as e:
+            log.error("malformed s3 record", error=str(e))
+            continue
+
+    return pairs
+    

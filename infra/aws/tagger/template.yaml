@@ -1,20 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Aussie EcoLens - Tagger Lambda (write path) + Query-Tagger Lambda.
-  Container-image Lambdas (one image, two entry points):
-    - Tagger: triggered by S3 uploads, runs MegaDetector + SpeciesNet and
-      writes species tags to the shared DynamoDB table.
-    - Query-Tagger: synchronously invoked by the query API for the
-      find-by-uploaded-file feature (2.2.3). Same ML, but stateless -
-      returns tags and persists nothing.
-  Models are lazy-loaded from S3 at cold start (no model baked into the
-  image, so they swap without a rebuild - assignment 4.1).
-
-  This stack creates ONLY tagger-specific resources (functions, their
-  execution roles, their log groups). The S3 buckets are owned by the
-  aussie-ecolens-infra stack and the DynamoDB table by the data/API owner;
-  both are referenced here by name, never created.
+  Aussie EcoLens - Tagger (write path) + Query-Tagger Lambdas. One container
+  image, two entry points: the tagger is triggered by S3 uploads via
+  EventBridge and writes species tags to the shared DynamoDB table; the
+  query-tagger is invoked synchronously by the query API for
+  find-by-uploaded-file (2.2.3) and persists nothing. Models lazy-load from S3
+  at cold start (4.1). This stack creates ONLY tagger-specific resources plus
+  the EventBridge rule routing upload events to the tagger; the S3 buckets and
+  DynamoDB table are owned by other stacks and referenced by name. The trigger
+  uses EventBridge (not a direct bucket notification) to decouple consumers
+  from the bucket's single notification slot; bucket-side EventBridge
+  enablement belongs in the infra stack that owns the bucket.
 
 Parameters:
   ProjectPrefix:
@@ -104,10 +101,10 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${ProjectPrefix}-tagger"
       RetentionInDays: !Ref LogRetentionDays
 
-  # The Tagger Lambda. Container image from ECR. No in-template S3 event:
-  # the uploads bucket lives in another stack, so the trigger is wired
-  # separately (see README - added to the infra stack's bucket or via
-  # put-bucket-notification-configuration).
+  # The Tagger Lambda. Container image from ECR. The S3 trigger is wired via
+  # EventBridge (see UploadsArrivalRule below), not a direct bucket
+  # notification - the bucket lives in another stack and EventBridge keeps the
+  # consumers decoupled.
   TaggerFunction:
     Type: AWS::Serverless::Function
     DependsOn: TaggerLogGroup
@@ -177,6 +174,50 @@ Resources:
               Resource:
                 - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}"
                 - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}/index/*"
+
+  # ---- S3 -> EventBridge -> Tagger trigger ----------------------------------
+  # Rule on the default event bus matching "Object Created" events emitted by
+  # the uploads bucket. EventBridge invokes the tagger as the target. This
+  # decouples the trigger from the bucket's single notification slot and keeps
+  # the wiring in IaC (versioned, reproducible) rather than a manual CLI
+  # put-bucket-notification-configuration call.
+  #
+  # PREREQUISITE: the uploads bucket must have EventBridge notifications
+  # enabled (NotificationConfiguration.EventBridgeConfiguration: {}). That is
+  # a property of the bucket and so belongs in the infra stack that owns it.
+  UploadsArrivalRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectPrefix}-uploads-to-tagger"
+      Description: >
+        Route S3 "Object Created" events from the uploads bucket to the
+        tagger Lambda (decoupled S3 trigger via EventBridge).
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - "Object Created"
+        detail:
+          bucket:
+            name:
+              - !If
+                - UploadsNameProvided
+                - !Ref UploadsBucketName
+                - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+      Targets:
+        - Id: TaggerFunctionTarget
+          Arn: !GetAtt TaggerFunction.Arn
+
+  # Allow EventBridge to invoke the tagger, scoped to this specific rule's ARN
+  # (least-privilege: only this rule, not any principal, can invoke).
+  TaggerEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TaggerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt UploadsArrivalRule.Arn
 
   # ---- Query-Tagger ---------------------------------------------------------
   # Same container image, different entry point (query_handler). Invoked
@@ -251,12 +292,17 @@ Resources:
 
 Outputs:
   TaggerFunctionArn:
-    Description: ARN of the tagger Lambda (needed to wire the S3 trigger).
+    Description: ARN of the tagger Lambda.
     Value: !GetAtt TaggerFunction.Arn
 
   TaggerFunctionName:
     Description: Name of the tagger Lambda.
     Value: !Ref TaggerFunction
+
+  UploadsArrivalRuleArn:
+    Description: >
+      ARN of the EventBridge rule routing upload events to the tagger.
+    Value: !GetAtt UploadsArrivalRule.Arn
 
   QueryTaggerFunctionArn:
     Description: ARN of the query-tagger Lambda (find-by-uploaded-file).
