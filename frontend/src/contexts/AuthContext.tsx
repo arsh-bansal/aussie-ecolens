@@ -23,7 +23,7 @@ interface AuthContextValue {
   register: (params: SignUpParams) => Promise<void>;
   verify: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   sendResetCode: (email: string) => Promise<void>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
 }
@@ -74,8 +74,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await resendConfirmationCode(email);
   };
 
-  const logout = () => {
-    signOut();
+  const logout = async () => {
+    await signOut();
     setUser(null);
   };
 
@@ -115,7 +115,7 @@ const AUTH_FALLBACK: AuthContextValue = {
   register: async () => {},
   verify: async () => {},
   resendCode: async () => {},
-  logout: () => {},
+  logout: async () => {},
   sendResetCode: async () => {},
   resetPassword: async () => {},
 };
