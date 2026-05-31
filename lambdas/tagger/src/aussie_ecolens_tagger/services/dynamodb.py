@@ -5,15 +5,29 @@ imports boto3 directly. Same testability rationale as S3Service:
 we can inject a fake DynamoDBService in unit tests without monkey-
 patching the module.
 
-Schema (single-table, per docs/data-model.md):
-    pk = FILE#<identifier>        partition key
-    sk = METADATA                 sort key for the file metadata item
-    plus: s3_bucket, s3_key, tags (map), n_detections, n_classified, tagged_at
+Schema (the shared cross-cloud contract - see RACHANA-BRIEF / data model):
+    pk            = FILE#<sha>            partition key (sha = upload checksum)
+    sk            = METADATA              sort key for the file metadata item
+    user_id       = <cognito-sub>         GSI hash; partition key on Cosmos
+    checksum      = <sha>
+    file_type     = image | video
+    s3_url        = s3://<bucket>/<key>
+    thumbnail_url = null                  (populated when thumbnails exist)
+    tags          = { common_name: count }
+    n_detections / n_classified / n_below_threshold
+    uploaded_at / updated_at = ISO-8601
+
+The S3 object key encodes identity as ``<cognito_sub>/<sha>.<ext>`` (set by
+the upload/dedup step). We parse it here so the record carries the user and
+checksum the rest of the system (dedup, the query API, Cosmos partitioning)
+relies on. The pk uses the bare sha - no slashes or dots - so it is also a
+valid Cosmos document id downstream.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import PurePosixPath
 from typing import Any
 
 import boto3
@@ -21,8 +35,15 @@ import boto3
 from aussie_ecolens_tagger.domain.models import TagResult
 from aussie_ecolens_tagger.exceptions import PersistenceError
 from aussie_ecolens_tagger.logging import get_logger
+from aussie_ecolens_tagger.species import common_name
 
 log = get_logger(__name__)
+
+# Image extensions get file_type "image"; everything else (mp4, mov, ...)
+# is treated as "video". Kept simple and explicit.
+_IMAGE_EXTS = frozenset(
+    {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"}
+)
 
 
 class DynamoDBService:
@@ -53,12 +74,11 @@ class DynamoDBService:
         )
 
     def put_tag_result(self, result: TagResult) -> None:
-        """Persist a TagResult as a single PutItem.
+        """Persist a TagResult as a single PutItem in the shared contract shape.
 
-        Idempotent: same (s3_bucket, s3_key) overwrites the previous record
-        with refreshed timestamp. S3 may deliver the same event twice; that
-        is harmless under this design because the second write produces
-        identical content.
+        Idempotent: the pk is FILE#<sha>, so re-tagging the same upload
+        overwrites the previous record with refreshed tags/timestamp. S3 may
+        deliver the same event twice; that is harmless here.
 
         Args:
             result: TagResult produced by the pipeline.
@@ -81,34 +101,70 @@ class DynamoDBService:
             ) from e
         log.info(
             "dynamodb put_item complete",
-            s3_key=result.s3_key,
-            tags=result.tags,
+            pk=item["pk"]["S"],
+            user_id=item["user_id"]["S"],
+            tags=list(item["tags"]["M"].keys()),
         )
 
     @staticmethod
-    def _to_item(result: TagResult) -> dict[str, dict[str, Any]]:
-        """Convert a TagResult to a DynamoDB AttributeValue map.
+    def _parse_key(s3_key: str) -> tuple[str, str, str]:
+        """Parse an upload key ``<cognito_sub>/<sha>.<ext>`` into parts.
+
+        Returns (user_id, sha, file_type). Defensive: if the key has no
+        directory component we fall back to user_id="unknown"; the sha is
+        always the filename stem so the pk stays slash/dot free.
+        """
+        path = PurePosixPath(s3_key)
+        sha = path.stem  # filename without extension
+        ext = path.suffix.lower()
+        # The cognito sub is the first path segment; anything deeper is
+        # ignored. "user-1/abc.jpg" -> user_id "user-1"; "abc.jpg" -> unknown.
+        parts = s3_key.split("/", 1)
+        user_id = parts[0] if len(parts) == 2 and parts[0] else "unknown"
+        file_type = "image" if ext in _IMAGE_EXTS else "video"
+        return user_id, sha, file_type
+
+    @classmethod
+    def _to_item(cls, result: TagResult) -> dict[str, dict[str, Any]]:
+        """Convert a TagResult to the shared-contract DynamoDB item.
+
+        - pk = FILE#<sha> (sha parsed from the S3 key; valid Cosmos id)
+        - user_id parsed from the key (Cosmos partition key, GSI hash)
+        - tags translated from Latin species ids to common names
 
         Encodes Python types into DynamoDB's typed JSON shape:
-            str -> {"S": value}
-            int -> {"N": str(value)}    (DynamoDB N is string-encoded)
-            dict[str, int] -> {"M": {k: {"N": str(v)}, ...}}
+            str -> {"S": value}; int -> {"N": str(value)};
+            dict[str,int] -> {"M": {k: {"N": str(v)}}}; null -> {"NULL": True}
         """
+        user_id, sha, file_type = cls._parse_key(result.s3_key)
+        now = _iso_utc_now()
+
+        # Latin -> common name, summing if two Latin ids map to one common name.
+        common_tags: dict[str, int] = {}
+        for latin, count in result.tags.items():
+            name = common_name(latin)
+            common_tags[name] = common_tags.get(name, 0) + count
+
         return {
-            "pk": {"S": f"FILE#{result.s3_key}"},
+            "pk": {"S": f"FILE#{sha}"},
             "sk": {"S": "METADATA"},
-            "s3_bucket": {"S": result.s3_bucket},
-            "s3_key": {"S": result.s3_key},
+            "user_id": {"S": user_id},
+            "checksum": {"S": sha},
+            "file_type": {"S": file_type},
+            "s3_url": {"S": f"s3://{result.s3_bucket}/{result.s3_key}"},
+            "thumbnail_url": {"NULL": True},
             "tags": {
-                "M": {sp: {"N": str(count)} for sp, count in result.tags.items()}
+                "M": {name: {"N": str(c)} for name, c in common_tags.items()}
             },
             "n_detections": {"N": str(result.n_detections)},
             "n_classified": {"N": str(result.n_classified)},
             "n_below_threshold": {"N": str(result.n_below_threshold)},
-            "tagged_at": {"S": _iso_utc_now()},
+            "uploaded_at": {"S": now},
+            "updated_at": {"S": now},
         }
 
 
 def _iso_utc_now() -> str:
     """Current UTC time as an ISO-8601 string suitable for DynamoDB."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
