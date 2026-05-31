@@ -25,7 +25,7 @@ lambdas/                AWS Lambda source (Python 3.12)
   tagger/               ML pipeline reference (P2 will containerise)
   (more added as P2 / P3 ship their slices)
 azure_functions/        Azure Function App source (P3 — to be added)
-frontend/               React UI (Vite + TS) — auth UI built; upload/search/tags by P4
+frontend/               React UI (Next.js 15 App Router + TS) — auth + upload/search/tags/notifications UI
 models/                 ML model artifacts (gitignored, see models/README.md)
 P1-Auth-Requirements.md What P1 (Adam) is doing
 AUTH-SETUP.md           How to deploy auth + bring up the dev server
@@ -54,11 +54,11 @@ aws cloudformation deploy --region ap-southeast-2 \
 
 # 4. Wire the frontend
 cd frontend
-cp .env.example .env.local
+cp .env.local.example .env.local
 # Edit .env.local with the outputs from both stacks
 npm install
 npm run dev
-# → http://localhost:5173
+# → http://localhost:3000
 ```
 
 ## Team

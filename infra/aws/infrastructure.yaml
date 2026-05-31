@@ -17,9 +17,12 @@ Parameters:
     Description: >
       Cognito App Client ID from the aussie-ecolens-auth stack output.
   DevOrigin:
-    Type: String
-    Default: http://localhost:5173
-    Description: Origin allowed for CORS during local development.
+    Type: CommaDelimitedList
+    Default: "http://localhost:3000,http://localhost:5173"
+    Description: >
+      Origins allowed for CORS during local development. The Next.js dev
+      server runs on :3000; :5173 is kept for the legacy Vite app. When P4
+      ships a public frontend URL, append it here (comma-separated).
   DynamoTableName:
     Type: String
     Default: ""
@@ -52,8 +55,7 @@ Resources:
         CorsRules:
           - AllowedHeaders: ["*"]
             AllowedMethods: [PUT, GET, HEAD]
-            AllowedOrigins:
-              - !Ref DevOrigin
+            AllowedOrigins: !Ref DevOrigin
             ExposedHeaders: [ETag]
             MaxAge: 3000
 
@@ -91,8 +93,7 @@ Resources:
         CorsRules:
           - AllowedHeaders: ["*"]
             AllowedMethods: [GET, HEAD]
-            AllowedOrigins:
-              - !Ref DevOrigin
+            AllowedOrigins: !Ref DevOrigin
             MaxAge: 3000
 
   ThumbnailsBucketPolicy:
@@ -321,8 +322,7 @@ Resources:
       Name: !Sub "${AppName}-api"
       ProtocolType: HTTP
       CorsConfiguration:
-        AllowOrigins:
-          - !Ref DevOrigin
+        AllowOrigins: !Ref DevOrigin
         AllowMethods: [GET, POST, DELETE, OPTIONS]
         AllowHeaders: [content-type, authorization]
         ExposeHeaders: [etag]
