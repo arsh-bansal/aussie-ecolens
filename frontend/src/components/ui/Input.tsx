@@ -16,14 +16,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
-          <label htmlFor={inputId} className="text-sm font-medium text-gray-300">
+          <label htmlFor={inputId} className="text-sm font-medium" style={{ color: 'var(--text)' }}>
             {label}
-            {props.required && <span className="text-red-400 ml-1">*</span>}
+            {props.required && <span className="ml-1" style={{ color: 'var(--danger)' }}>*</span>}
           </label>
         )}
         <div className="relative flex items-center">
           {leftAddon && (
-            <div className="absolute left-3 flex items-center text-gray-500 pointer-events-none z-10">
+            <div className="absolute left-3.5 flex items-center pointer-events-none z-10" style={{ color: 'var(--muted)' }}>
               {leftAddon}
             </div>
           )}
@@ -31,25 +31,32 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={cn(
-              'w-full bg-dark-300 border rounded-lg py-2.5 text-sm text-gray-100 transition-all duration-200',
-              'placeholder:text-gray-600',
-              'focus:outline-none focus:ring-2 focus:ring-forest-500/30 focus:border-forest-500/50',
+              'w-full rounded-xl py-2.5 text-sm transition-all duration-200',
+              'placeholder:opacity-40',
+              'focus:outline-none focus:ring-2',
               'disabled:opacity-50 disabled:cursor-not-allowed',
-              error
-                ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20'
-                : 'border-dark-50 hover:border-dark-50/80',
-              leftAddon ? 'pl-10' : 'px-3.5',
+              leftAddon  ? 'pl-10' : 'px-3.5',
               rightAddon ? 'pr-10' : 'px-3.5',
               className
             )}
+            style={{
+              background:   'var(--input-bg)',
+              border:       error ? '1.5px solid var(--danger)' : '1.5px solid var(--input-border)',
+              color:        'var(--text)',
+              boxShadow:    error ? undefined : 'none',
+              // @ts-ignore
+              '--tw-ring-color': 'rgba(82,183,136,0.25)',
+            } as React.CSSProperties}
             {...props}
           />
           {rightAddon && (
-            <div className="absolute right-3 flex items-center text-gray-500 z-10">{rightAddon}</div>
+            <div className="absolute right-3.5 flex items-center z-10" style={{ color: 'var(--muted)' }}>
+              {rightAddon}
+            </div>
           )}
         </div>
-        {error && <p className="text-xs text-red-400 flex items-center gap-1">{error}</p>}
-        {hint && !error && <p className="text-xs text-gray-600">{hint}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
+        {hint && !error && <p className="text-xs opacity-60" style={{ color: 'var(--muted)' }}>{hint}</p>}
       </div>
     );
   }

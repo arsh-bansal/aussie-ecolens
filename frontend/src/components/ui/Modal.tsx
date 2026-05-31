@@ -14,12 +14,7 @@ interface ModalProps {
   className?: string;
 }
 
-const sizes = {
-  sm: 'max-w-sm',
-  md: 'max-w-md',
-  lg: 'max-w-lg',
-  xl: 'max-w-2xl',
-};
+const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl' };
 
 export default function Modal({ open, onClose, title, description, children, size = 'md', className }: ModalProps) {
   useEffect(() => {
@@ -38,7 +33,8 @@ export default function Modal({ open, onClose, title, description, children, siz
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 backdrop-blur-sm animate-fade-in"
+        style={{ background: 'rgba(0,0,0,0.55)' }}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -46,26 +42,31 @@ export default function Modal({ open, onClose, title, description, children, siz
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? 'modal-title' : undefined}
-        className={cn(
-          'relative w-full bg-dark-200 border border-dark-50 rounded-2xl shadow-2xl animate-slide-up',
-          sizes[size],
-          className
-        )}
+        className={cn('relative w-full rounded-2xl shadow-2xl animate-slide-up', sizes[size], className)}
+        style={{
+          background: 'var(--surface)',
+          border:     '1px solid var(--border)',
+          boxShadow:  'var(--shadow)',
+        }}
       >
         {(title || description) && (
-          <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-dark-50">
+          <div
+            className="flex items-start justify-between px-6 pt-5 pb-4"
+            style={{ borderBottom: '1px solid var(--border)' }}
+          >
             <div>
               {title && (
-                <h3 id="modal-title" className="text-base font-semibold text-gray-100">
+                <h3 id="modal-title" className="text-base font-bold font-display" style={{ color: 'var(--text)' }}>
                   {title}
                 </h3>
               )}
-              {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+              {description && <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>{description}</p>}
             </div>
             <button
               onClick={onClose}
               aria-label="Close modal"
-              className="ml-4 mt-0.5 flex-shrink-0 text-gray-600 hover:text-gray-200 transition-colors rounded-lg p-1 hover:bg-white/5"
+              className="ml-4 mt-0.5 flex-shrink-0 rounded-lg p-1.5 transition-opacity hover:opacity-70"
+              style={{ color: 'var(--muted)' }}
             >
               <X className="h-4 w-4" />
             </button>

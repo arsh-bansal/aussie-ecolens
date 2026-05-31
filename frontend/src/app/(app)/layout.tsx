@@ -17,21 +17,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   //   }
   // }, [isAuthenticated, isLoading, router]);
 
-  // if (isLoading) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center">
-  //       <PageSpinner />
-  //     </div>
-  //   );
-  // }
-
-  // if (!isAuthenticated) return null;
-
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
       <Sidebar />
-      <main className="flex-1 min-w-0 overflow-y-auto">
-        <div className="lg:pl-0 pl-0 pt-16 lg:pt-0">
+      <main className="flex-1 min-w-0 overflow-y-auto" style={{ background: 'var(--bg)' }}>
+        <div className="pt-16 lg:pt-0">
           {children}
         </div>
       </main>

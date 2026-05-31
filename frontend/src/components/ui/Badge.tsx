@@ -8,22 +8,18 @@ interface BadgeProps {
   dot?: boolean;
 }
 
-const variants = {
-  green: 'bg-forest-950 text-forest-300 border-forest-500/25',
-  blue: 'bg-blue-950 text-blue-300 border-blue-500/25',
-  amber: 'bg-amber-950 text-amber-300 border-amber-500/25',
-  red: 'bg-red-950 text-red-300 border-red-500/25',
-  gray: 'bg-dark-100 text-gray-400 border-dark-50',
-  purple: 'bg-purple-950 text-purple-300 border-purple-500/25',
+const variantStyles: Record<string, React.CSSProperties> = {
+  green:  { background: 'rgba(82,183,136,0.12)',  color: 'var(--primary)',  border: '1px solid rgba(82,183,136,0.25)' },
+  blue:   { background: 'rgba(82,179,217,0.12)',  color: '#52b3d9',         border: '1px solid rgba(82,179,217,0.25)' },
+  amber:  { background: 'rgba(233,196,106,0.12)', color: 'var(--accent)',   border: '1px solid rgba(233,196,106,0.25)' },
+  red:    { background: 'rgba(193,68,14,0.10)',   color: 'var(--danger)',   border: '1px solid rgba(193,68,14,0.25)' },
+  gray:   { background: 'var(--input-bg)',        color: 'var(--muted)',    border: '1px solid var(--border)' },
+  purple: { background: 'rgba(147,51,234,0.10)',  color: '#a855f7',         border: '1px solid rgba(147,51,234,0.25)' },
 };
 
-const dotColors = {
-  green: 'bg-forest-400',
-  blue: 'bg-blue-400',
-  amber: 'bg-amber-400',
-  red: 'bg-red-400',
-  gray: 'bg-gray-500',
-  purple: 'bg-purple-400',
+const dotColors: Record<string, string> = {
+  green: 'var(--primary)',  blue: '#52b3d9',  amber: 'var(--accent)',
+  red: 'var(--danger)',     gray: 'var(--muted)', purple: '#a855f7',
 };
 
 const sizes = {
@@ -32,23 +28,18 @@ const sizes = {
   md: 'px-2.5 py-1 text-sm',
 };
 
-export default function Badge({
-  children,
-  variant = 'green',
-  size = 'sm',
-  className,
-  dot = false,
-}: BadgeProps) {
+export default function Badge({ children, variant = 'green', size = 'sm', className, dot = false }: BadgeProps) {
   return (
     <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border font-medium',
-        variants[variant],
-        sizes[size],
-        className
-      )}
+      className={cn('inline-flex items-center gap-1.5 rounded-full font-semibold', sizes[size], className)}
+      style={variantStyles[variant]}
     >
-      {dot && <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', dotColors[variant])} />}
+      {dot && (
+        <span
+          className="h-1.5 w-1.5 rounded-full flex-shrink-0"
+          style={{ background: dotColors[variant] }}
+        />
+      )}
       {children}
     </span>
   );
