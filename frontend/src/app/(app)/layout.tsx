@@ -10,12 +10,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
-  // TODO: re-enable auth guard once Cognito .env.local is configured
-  // useEffect(() => {
-  //   if (!isLoading && !isAuthenticated) {
-  //     router.replace('/login');
-  //   }
-  // }, [isAuthenticated, isLoading, router]);
+  // Auth guard (assignment requirement): unauthenticated users are blocked
+  // from every (app) page and redirected to the login page.
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  // While auth state resolves, or while an unauthenticated user is being
+  // redirected, show a spinner instead of the protected content.
+  if (isLoading || !isAuthenticated) {
+    return <PageSpinner />;
+  }
 
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
