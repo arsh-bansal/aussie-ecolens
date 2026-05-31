@@ -31,35 +31,30 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(app)/upload/page.js"
     ],
-    "/(app)/dashboard/page": [
+    "/(app)/manage/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(app)/dashboard/page.js"
-    ],
-    "/(app)/search/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(app)/search/page.js"
+      "static/chunks/app/(app)/manage/page.js"
     ],
     "/(app)/notifications/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(app)/notifications/page.js"
     ],
-    "/(app)/manage/page": [
+    "/(app)/search/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(app)/manage/page.js"
+      "static/chunks/app/(app)/search/page.js"
     ],
-    "/(auth)/forgot-password/page": [
+    "/(app)/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(auth)/forgot-password/page.js"
+      "static/chunks/app/(app)/dashboard/page.js"
     ],
-    "/(auth)/signup/page": [
+    "/_not-found/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(auth)/signup/page.js"
+      "static/chunks/app/_not-found/page.js"
     ]
   }
 }
