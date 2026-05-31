@@ -206,6 +206,16 @@ Resources:
                 - UploadsNameProvided
                 - !Ref UploadsBucketName
                 - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+          object:
+            key:
+              - suffix: ".jpg"
+              - suffix: ".jpeg"
+              - suffix: ".JPG"
+              - suffix: ".JPEG"
+              - suffix: ".png"
+              - suffix: ".PNG"
+              - suffix: ".webp"
+              - suffix: ".gif"
       Targets:
         - Id: TaggerFunctionTarget
           Arn: !GetAtt TaggerFunction.Arn
@@ -292,7 +302,123 @@ Resources:
                     - !Ref UploadsBucketName
                     - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
 
+  # ---- Video-Tagger ---------------------------------------------------------
+  # Third entry point on the same tagger image (video_handler). Triggered by
+  # video uploads (EventBridge, video-suffix filtered). Samples one frame per
+  # second, tags each frame with the shared image pipeline, aggregates the
+  # per-frame tags (max count per species), and writes ONE video record
+  # (file_type=video, thumbnail_url NULL). Longer timeout + ephemeral storage
+  # than the image tagger because a video is many frames of inference.
+  VideoTaggerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectPrefix}-video-tagger"
+      RetentionInDays: !Ref LogRetentionDays
+
+  VideoTaggerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: VideoTaggerLogGroup
+    Properties:
+      FunctionName: !Sub "${ProjectPrefix}-video-tagger"
+      PackageType: Image
+      ImageUri: !Ref ImageUri
+      Timeout: 900
+      EphemeralStorage:
+        Size: 4096
+      ImageConfig:
+        Command:
+          - aussie_ecolens_tagger.video_handler.lambda_handler
+      Environment:
+        Variables:
+          UPLOADS_BUCKET: !If
+            - UploadsNameProvided
+            - !Ref UploadsBucketName
+            - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+          MODELS_BUCKET: !If
+            - ModelsNameProvided
+            - !Ref ModelsBucketName
+            - !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+          THUMBNAILS_BUCKET: !Sub "${ProjectPrefix}-thumbnails-${AWS::AccountId}"
+          FILES_TABLE: !Ref FilesTableName
+          LOAD_MODELS_FROM_S3: "true"
+          MEGADETECTOR_PATH: /tmp/models/mdv5a.pt
+          SPECIESNET_PATH: /tmp/models/model.pt
+          MEGADETECTOR_S3_KEY: !Ref MegadetectorS3Key
+          SPECIESNET_S3_KEY: !Ref SpeciesnetS3Key
+          DETECTION_THRESHOLD: !Ref DetectionThreshold
+          SPECIES_THRESHOLD: !Ref SpeciesThreshold
+          MAX_VIDEO_FRAMES: "30"
+          USE_NNPACK: "0"
+          MPLCONFIGDIR: /tmp/matplotlib
+          LOG_LEVEL: INFO
+          DRY_RUN: "false"
+      Policies:
+        - Statement:
+            - Sid: ReadUploads
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub
+                - "arn:aws:s3:::${Bucket}/*"
+                - Bucket: !If
+                    - UploadsNameProvided
+                    - !Ref UploadsBucketName
+                    - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+            - Sid: ReadModels
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub
+                - "arn:aws:s3:::${Bucket}/*"
+                - Bucket: !If
+                    - ModelsNameProvided
+                    - !Ref ModelsBucketName
+                    - !Sub "${ProjectPrefix}-models-${AWS::AccountId}"
+            - Sid: WriteFilesTable
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource:
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}"
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}/index/*"
+      Events:
+        VideoUploaded:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - "Object Created"
+              detail:
+                bucket:
+                  name:
+                    - !If
+                      - UploadsNameProvided
+                      - !Ref UploadsBucketName
+                      - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+                object:
+                  key:
+                    - suffix: ".mp4"
+                    - suffix: ".MP4"
+                    - suffix: ".mov"
+                    - suffix: ".MOV"
+                    - suffix: ".avi"
+                    - suffix: ".mkv"
+                    - suffix: ".webm"
+
+
 Outputs:
+  VideoTaggerFunctionArn:
+    Description: ARN of the video-tagger Lambda.
+    Value: !GetAtt VideoTaggerFunction.Arn
+
+  VideoTaggerFunctionName:
+    Description: Name of the video-tagger Lambda.
+    Value: !Ref VideoTaggerFunction
+
   TaggerFunctionArn:
     Description: ARN of the tagger Lambda.
     Value: !GetAtt TaggerFunction.Arn

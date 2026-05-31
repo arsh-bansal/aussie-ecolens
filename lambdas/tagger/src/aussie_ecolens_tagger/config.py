@@ -118,6 +118,16 @@ class TaggerSettings(BaseSettings):
         description="Square pixel size for SpeciesNet input crops",
     )
 
+    max_video_frames: int = Field(
+        default=30,
+        ge=1,
+        le=900,
+        description=(
+            "Max frames (= seconds, at 1 fps) to tag per video. Bounds runtime "
+            "within the Lambda timeout; longer videos are truncated."
+        ),
+    )
+
     # Operational flags.
     log_level: str = Field(default="INFO", description="Root structlog level")
 
