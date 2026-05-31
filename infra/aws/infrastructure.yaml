@@ -58,6 +58,13 @@ Resources:
             AllowedOrigins: !Ref DevOrigin
             ExposedHeaders: [ETag]
             MaxAge: 3000
+      # Emit S3 object-level events to EventBridge so the ingest pipeline
+      # (P2 tagger/thumbnailer) can subscribe via EventBridge rules. Was
+      # enabled out-of-band via the CLI; declared here to bring it under
+      # IaC and remove stack drift.
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
 
   UploadsBucketPolicy:
     Type: AWS::S3::BucketPolicy
