@@ -86,8 +86,34 @@ export function signIn(email: string, password: string): Promise<AuthResult> {
   });
 }
 
-export function signOut(): void {
-  pool().getCurrentUser()?.signOut();
+export function signOut(): Promise<void> {
+  return new Promise((resolve) => {
+    const user = pool().getCurrentUser();
+    if (!user) {
+      resolve();
+      return;
+    }
+    // globalSignOut revokes the refresh token server-side (the app client
+    // has EnableTokenRevocation: true) so a token held from before sign-out
+    // can't be refreshed afterwards. It needs a valid session loaded first,
+    // and clears the cached tokens on success.
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
+      if (err || !session?.isValid()) {
+        // No valid session to revoke — just clear local tokens.
+        user.signOut();
+        resolve();
+        return;
+      }
+      user.globalSignOut({
+        onSuccess: () => resolve(),
+        onFailure: () => {
+          // Even if the revoke call fails, end the local browser session.
+          user.signOut();
+          resolve();
+        },
+      });
+    });
+  });
 }
 
 export function getCurrentSession(): Promise<AuthResult> {
