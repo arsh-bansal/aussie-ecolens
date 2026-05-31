@@ -17,10 +17,11 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-const PHOTO_COLS = [
-  { animals: ['koala','kangaroo','wombat','echidna','quokka','platypus'],        dir: 'up',   duration: 26, offset: 0   },
-  { animals: ['cassowary','cockatoo','flying-fox','bilby','numbat','dingo'],     dir: 'down', duration: 34, offset: -9  },
-  { animals: ['possum','wallaby','emu','kookaburra','echidna','koala'],          dir: 'up',   duration: 22, offset: -16 },
+// 3 rows × 6 animals — same layout as BirdNest reference
+const ROWS = [
+  ['koala',     'kangaroo',   'wombat',    'echidna',    'quokka',     'platypus'],
+  ['possum',    'wallaby',    'emu',        'kookaburra', 'dingo',      'cassowary'],
+  ['cockatoo',  'flying-fox', 'bilby',      'numbat',     'koala',      'kangaroo'],
 ];
 
 function GridPhoto({ name }: { name: string }) {
@@ -245,55 +246,53 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── Right: Animated wildlife columns ── */}
-      <div className="hidden lg:flex flex-1 relative overflow-hidden">
+      {/* ── Right: Heading + 3-row photo grid (BirdNest style) ── */}
+      <div className="hidden lg:flex flex-1 flex-col justify-center overflow-hidden px-8 py-10">
 
-        {/* Gradient fades — left, top, bottom */}
-        <div className="absolute left-0 top-0 bottom-0 w-24 z-20 pointer-events-none"
-             style={{ background: 'linear-gradient(to right, var(--bg), transparent)' }} />
-        <div className="absolute inset-x-0 top-0 h-28 z-20 pointer-events-none"
-             style={{ background: 'linear-gradient(to bottom, var(--bg), transparent)' }} />
-        <div className="absolute inset-x-0 bottom-0 h-44 z-20 pointer-events-none"
-             style={{ background: 'linear-gradient(to top, var(--bg) 20%, transparent)' }} />
+        {/* Heading — top, centered */}
+        <div className="text-center mb-6 page-enter">
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
+            style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+          >
+            <span className="text-sm">📷</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--primary)' }}>
+              AI-Powered Detection
+            </span>
+          </div>
+          <h2 className="text-3xl font-bold font-display leading-snug" style={{ color: 'var(--text)' }}>
+            Take a picture and<br />
+            <span style={{ color: 'var(--accent)' }}>identify it instantly ✦</span>
+          </h2>
+          <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
+            Upload any photo and MegaDetector + SpeciesNet will instantly identify the species.
+          </p>
+        </div>
 
-        {/* Scrolling photo columns */}
-        <div className="absolute inset-0 flex gap-3 px-6 py-4">
-          {PHOTO_COLS.map(({ animals, dir, duration, offset }, colIdx) => (
-            <div key={colIdx} className="photo-col flex-1 overflow-hidden">
-              <div
-                className="photo-col-inner flex flex-col gap-3"
-                style={{
-                  animation: `${dir === 'up' ? 'scroll-up' : 'scroll-down'} ${duration}s linear infinite`,
-                  animationDelay: `${offset}s`,
-                }}
-              >
-                {[...animals, ...animals].map((name, i) => (
-                  <GridPhoto key={`${name}-${i}`} name={name} />
-                ))}
-              </div>
+        {/* 3 rows × 6 photos */}
+        <div className="flex flex-col gap-2.5 page-enter-1">
+          {ROWS.map((row, ri) => (
+            <div key={ri} className="flex gap-2.5">
+              {row.map((name) => (
+                <div
+                  key={name}
+                  className="relative flex-1 overflow-hidden rounded-xl group"
+                  style={{ aspectRatio: '4/3', minWidth: 0, background: 'var(--border)' }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/wildlife/${name}.jpg`}
+                    alt={name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              ))}
             </div>
           ))}
         </div>
 
-        {/* Heading — bottom overlay */}
-        <div className="absolute bottom-9 left-10 right-8 z-30 page-enter">
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-3"
-            style={{ background: 'var(--nav-active-bg)', border: '1px solid var(--border)' }}
-          >
-            <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: 'var(--primary)' }} />
-            <span className="text-xs font-medium" style={{ color: 'var(--primary)' }}>
-              AI-Powered Wildlife Detection
-            </span>
-          </div>
-          <h2 className="text-2xl font-bold font-display leading-snug" style={{ color: 'var(--text)' }}>
-            Upload a photo and<br />
-            <span style={{ color: 'var(--primary)' }}>identify it instantly 🦘</span>
-          </h2>
-          <p className="mt-2 text-sm max-w-xs" style={{ color: 'var(--muted)' }}>
-            MegaDetector + SpeciesNet detects 45+ Australian species across images and videos.
-          </p>
-        </div>
       </div>
     </div>
   );

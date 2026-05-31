@@ -542,8 +542,14 @@ video {
 .bottom-0{
   bottom: 0px;
 }
+.bottom-9{
+  bottom: 2.25rem;
+}
 .left-0{
   left: 0px;
+}
+.left-10{
+  left: 2.5rem;
 }
 .left-2{
   left: 0.5rem;
@@ -560,6 +566,9 @@ video {
 .right-3\.5{
   right: 0.875rem;
 }
+.right-8{
+  right: 2rem;
+}
 .top-0{
   top: 0px;
 }
@@ -572,17 +581,11 @@ video {
 .top-4{
   top: 1rem;
 }
-.bottom-9{
-  bottom: 2.25rem;
-}
-.left-10{
-  left: 2.5rem;
-}
-.right-8{
-  right: 2rem;
-}
 .z-10{
   z-index: 10;
+}
+.z-20{
+  z-index: 20;
 }
 .z-30{
   z-index: 30;
@@ -592,9 +595,6 @@ video {
 }
 .z-50{
   z-index: 50;
-}
-.z-20{
-  z-index: 20;
 }
 .mx-auto{
   margin-left: auto;
@@ -742,6 +742,9 @@ video {
 .h-4{
   height: 1rem;
 }
+.h-44{
+  height: 11rem;
+}
 .h-5{
   height: 1.25rem;
 }
@@ -771,9 +774,6 @@ video {
 }
 .h-screen{
   height: 100vh;
-}
-.h-44{
-  height: 11rem;
 }
 .min-h-\[200px\]{
   min-height: 200px;
@@ -961,9 +961,6 @@ video {
 }
 .grid-cols-2{
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.grid-cols-4{
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .flex-col{
   flex-direction: column;
@@ -1324,6 +1321,9 @@ video {
 .capitalize{
   text-transform: capitalize;
 }
+.italic{
+  font-style: italic;
+}
 .leading-none{
   line-height: 1;
 }
@@ -1399,6 +1399,11 @@ video {
 }
 .transition-transform{
   transition-property: transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+.transition{
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
@@ -1653,6 +1658,26 @@ code, pre, .font-mono { font-family: var(--font-mono); }
   50%       { transform: rotate(3deg); }
 }
 .koala-sway { animation: koala-sway 4s ease-in-out infinite; transform-origin: top center; }
+
+/* ── Sidebar nav link hover ────────────────────────────────────── */
+.sidebar-nav-link:hover {
+  background: var(--nav-active-bg) !important;
+  color: var(--text) !important;
+}
+
+/* ── Active nav indicator pulse ────────────────────────────────── */
+@keyframes nav-indicator-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(45,106,79,0.5); }
+  50%       { box-shadow: 0 0 0 4px rgba(45,106,79,0); }
+}
+.dark .nav-indicator-pulse {
+  animation-name: nav-indicator-pulse-dark;
+}
+@keyframes nav-indicator-pulse-dark {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82,183,136,0.5); }
+  50%       { box-shadow: 0 0 0 4px rgba(82,183,136,0); }
+}
+.nav-indicator { animation: nav-indicator-pulse 2.4s ease-in-out infinite; }
 
 /* ── Infinite photo column scroll (login) ──────────────────────── */
 @keyframes scroll-up   { from { transform: translateY(0); }    to { transform: translateY(-50%); } }

@@ -3,5 +3,7 @@
   "/(app)/upload/page": "app/(app)/upload/page.js",
   "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
   "/(auth)/forgot-password/page": "app/(auth)/forgot-password/page.js",
-  "/(app)/search/page": "app/(app)/search/page.js"
+  "/(app)/search/page": "app/(app)/search/page.js",
+  "/(app)/manage/page": "app/(app)/manage/page.js",
+  "/(app)/notifications/page": "app/(app)/notifications/page.js"
 }

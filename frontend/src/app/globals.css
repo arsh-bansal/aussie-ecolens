@@ -242,6 +242,26 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 }
 .koala-sway { animation: koala-sway 4s ease-in-out infinite; transform-origin: top center; }
 
+/* ── Sidebar nav link hover ────────────────────────────────────── */
+.sidebar-nav-link:hover {
+  background: var(--nav-active-bg) !important;
+  color: var(--text) !important;
+}
+
+/* ── Active nav indicator pulse ────────────────────────────────── */
+@keyframes nav-indicator-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(45,106,79,0.5); }
+  50%       { box-shadow: 0 0 0 4px rgba(45,106,79,0); }
+}
+.dark .nav-indicator-pulse {
+  animation-name: nav-indicator-pulse-dark;
+}
+@keyframes nav-indicator-pulse-dark {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82,183,136,0.5); }
+  50%       { box-shadow: 0 0 0 4px rgba(82,183,136,0); }
+}
+.nav-indicator { animation: nav-indicator-pulse 2.4s ease-in-out infinite; }
+
 /* ── Infinite photo column scroll (login) ──────────────────────── */
 @keyframes scroll-up   { from { transform: translateY(0); }    to { transform: translateY(-50%); } }
 @keyframes scroll-down { from { transform: translateY(-50%); } to { transform: translateY(0); }    }
