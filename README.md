@@ -65,7 +65,7 @@ npm run dev
 
 | Name | Student ID | Role | Slice |
 | --- | --- | --- | --- |
-| Adam | _TBD_ | P1 — Auth + Infra | Cognito, S3, IAM, API Gateway, /uploads/check Lambda, React auth UI, architecture diagram, team report |
+| Adam | _TBD_ | P1 — Auth + Infra | Cognito, S3, IAM, API Gateway, /uploads/presign Lambda, React auth UI, architecture diagram, team report |
 | Arsh | _TBD_ | P2 — ML | Containerised Tagger Lambda (MegaDetector + SpeciesNet), Thumbnail, Video Splitter, Aggregator |
 | Rachana | _TBD_ | P3 — DB/API | DynamoDB schema + streams, Cosmos DB on Azure, 6 query endpoints in Azure Functions, JWT verifier, Replicator + Notifier Lambdas |
 | Shaurya | _TBD_ | P4 — UI | Upload page, search page, tag editor, delete UI, SNS subscription UI, API client wrappers |
@@ -75,7 +75,7 @@ npm run dev
 - ✅ Cognito User Pool + App Client deployed
 - ✅ S3 buckets (uploads, thumbnails, models) deployed with encryption, no public access, deny-non-HTTPS bucket policies, CORS
 - ✅ API Gateway HTTP API + Cognito JWT authorizer deployed
-- ✅ `/uploads/check` Lambda — SHA-256 dedup, MIME + size validation, presigned PUT URL
+- ✅ `/uploads/presign` Lambda — POST JSON, SHA-256 dedup, MIME + size validation, presigned PUT URL, seeds the file metadata record (dedup + seed need P3's DynamoDB table to be live)
 - ✅ Scoped IAM policy for the deploy identity (`infra/aws/p1-deployer-policy.json`)
 - ✅ React auth UI — sign-up, verify, login, sign-out, forgot/reset password, proactive 50-min token refresh
 - ✅ Cross-cloud JWT verification contract for P3 to implement (`docs/auth-contract.md`)

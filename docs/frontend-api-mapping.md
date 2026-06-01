@@ -1,17 +1,16 @@
 # Frontend ↔ API mapping
 
-**Owner:** P1 (Adam). **Updated:** 2026-05-31.
+**Owner:** P1 (Adam). **Updated:** 2026-06-01.
 **Companion to:** `docs/api.md` (the agreed contract), `docs/auth-contract.md`.
 
 This maps what the Next.js frontend (`frontend/src/lib/api.ts`) actually calls
-against (a) the agreed contract in `docs/api.md` and (b) what is **currently
-deployed** on AWS. It exists because the frontend follows the contract, but the
-deployed AWS write-path Lambda does **not** yet — so the two need reconciling
-before the upload flow works end to end.
+against (a) the agreed contract in `docs/api.md` and (b) what the infra template
+(`infra/aws/infrastructure.yaml`) now implements.
 
-TL;DR: **Auth is compatible. CORS is fixed in this commit (needs redeploy).
-The one real gap is the AWS upload endpoint: deployed `GET /uploads/check`
-≠ contract `POST /uploads/presign`.**
+TL;DR: **Auth is compatible. CORS is fixed (needs redeploy). The upload
+endpoint now matches the contract — `POST /uploads/presign` is implemented,
+including the dedup check and a seed metadata record (see §4). It needs the
+DynamoDB table to exist before it can be deployed/tested end to end.**
 
 ## 1. Auth — ✅ compatible, no change needed
 
@@ -55,7 +54,7 @@ Legend: ✅ matches contract & deployed · 🟡 contract-correct but **not deplo
 
 | Frontend call (`api.ts`) | Method + path | In `docs/api.md`? | Deployed today | Status |
 |---|---|---|---|---|
-| `api.presign()` | `POST /uploads/presign` | ✅ yes | ❌ only `GET /uploads/check` | 🔴 **mismatch — see §4** |
+| `api.presign()` | `POST /uploads/presign` | ✅ yes | ✅ implemented (dedup + seed record) | 🟢 **resolved — see §4** |
 | `api.modifyTags()` | `POST /tags/modify` | ✅ yes | ❌ not implemented | 🟡 to build |
 | `api.deleteFiles()` | `POST /files/delete` | ✅ yes | ❌ not implemented | 🟡 to build |
 | `api.subscribe()` | `POST /tags/subscribe` | ✅ yes | ❌ not implemented | 🟡 to build |
@@ -79,35 +78,56 @@ The frontend correctly routes `searchByFile` to `NEXT_PUBLIC_AZURE_API_BASE` as
 also lists an AWS-internal `/search/by-file` callback taking `image_b64` — that is
 Azure→AWS server-to-server, not called by the browser, so no frontend impact.)
 
-## 4. The real gap: `/uploads/check` (deployed) vs `/uploads/presign` (contract)
+## 4. Upload endpoint — now matches the contract ✅
 
-The frontend's `api.presign()` and the contract both expect a **POST with a JSON
-body**; the deployed Lambda is a **GET reading query-string params**, with a
-different response shape.
+Previously the Lambda was `GET /uploads/check` (query params, read-only). It is
+now `POST /uploads/presign`, reading a JSON body and returning the contract
+shape. The route, the Lambda body, and the IAM role were all updated in
+`infra/aws/infrastructure.yaml`.
 
-| | Deployed `GET /uploads/check` | Contract/frontend `POST /uploads/presign` |
-|---|---|---|
-| Method | `GET` | `POST` |
-| Auth | JWT (Cognito authorizer) | JWT (same) |
-| Input | query: `hash`, `mime`, `size` | JSON body: `sha256`, `filename`, `mime_type`, `size_bytes` |
-| New-file resp | `{ already_uploaded:false, presigned_url, key, bucket, expires_in, content_type }` | `{ duplicate:false, upload_url, file_id, expires_in }` |
-| Dup resp | `{ already_uploaded:true, existing_url, thumbnail_url }` | `{ duplicate:true, file_id, existing_url, tags }` |
+| | Now implemented: `POST /uploads/presign` |
+|---|---|
+| Method | `POST` (JWT, Cognito authorizer) |
+| Input | JSON body: `sha256`, `filename`, `mime_type`, `size_bytes` |
+| New-file resp | `{ duplicate:false, upload_url, file_id, expires_in }` |
+| Dup resp | `{ duplicate:true, file_id, existing_url, tags }` |
+| Errors | `{ "error": { "code", "message" } }` per `docs/api.md` |
 
-As-is, `api.presign()` hits a route that doesn't exist (404) — and even if routed,
-the field names wouldn't line up.
+This matches `PresignRequest`/`PresignResponse` in `frontend/src/types/index.ts`
+exactly, so `api.presign()` works without frontend changes.
 
-**Recommended fix (preferred): bring the backend up to the contract.** Add a
-`POST /uploads/presign` route + adapt the Lambda to read the JSON body and return
-`{duplicate, upload_url, file_id, expires_in}`. The contract (`docs/api.md`) is the
-agreed source of truth and the frontend already implements it, so changing the
-backend keeps both Azure and frontend aligned and avoids touching the contract.
+### What the Lambda now does (two writes coordinated with P2's tagger)
 
-**Alternative (faster, not recommended): change the frontend** to call
-`GET /uploads/check` with query params and remap the response. Rejected because it
-diverges from the agreed `docs/api.md` and would need to be undone later.
+1. **Dedup check** — `GetItem` on `FILE#<sha256>/METADATA`. If present, returns
+   `{duplicate:true, existing_url, tags}` and skips re-upload/re-tag.
+2. **Presigned PUT** — issues the 5-min direct-to-S3 URL.
+3. **Seed metadata record** — `PutItem` of `FILE#<sha256>/METADATA` with
+   `owner_sub`, `mime_type`, `original_filename`, `size_bytes`, `s3_key`,
+   `s3_url`, `file_type`, `status: pending`, `uploaded_at`, and the `gsi2`
+   owner-index keys. Guarded by `attribute_not_exists(pk)` so it is idempotent
+   and **never overwrites** an existing record.
 
-Either way: it is a **decision + small change**, not a blocker for landing the
-frontend. Tracking it here so it isn't forgotten.
+**Coordination with the tagger (P2 / Arsh):** presign seeds the record; the
+tagger must use `update_item` (merge) to add only its own fields (`tags`,
+`thumbnail_url`, `thumbnail_s3_key`, `file_type`, `status`, `tagged_at`). Because
+presign uses condition-guarded `put_item` and the tagger uses `update_item`, the
+two writes never clobber each other regardless of ordering. (Confirmed with Arsh
+2026-06-01.)
+
+### Why this also fixes dedup
+
+The dedup check reads the same `FILE#<sha>/METADATA` item that the seed-write
+creates. Before this change nothing wrote that item, so a second upload of the
+same file could never be detected. The seed-write closes that loop.
+
+### Dependency / not-yet-testable
+
+The Lambda is gated on `DDB_TABLE`: with no table set it skips both the dedup
+read and the seed write (treats every file as new, writes nothing) and still
+returns a working presigned URL. So **dedup + metadata only function once P3's
+DynamoDB table exists** and the infra stack is redeployed with
+`DynamoTableName=<table>`. Until then this is implemented but unverified
+end to end.
 
 ## 5. Env vars the frontend reads
 

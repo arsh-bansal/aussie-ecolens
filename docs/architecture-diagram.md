@@ -21,7 +21,7 @@ flowchart TB
     subgraph AWS["AWS · ap-southeast-2 (write side, system of record)"]
         Cognito["Cognito User Pool<br/>(JWT issuer + JWKS)"]
         APIGW["API Gateway HTTP API<br/>+ JWT authorizer"]
-        UCheckLam["Lambda: /uploads/check<br/>(dedup + presigned PUT)"]
+        UCheckLam["Lambda: /uploads/presign<br/>(dedup + presigned PUT + seed record)"]
         S3Up["S3: uploads"]
         S3Thumb["S3: thumbnails"]
         S3Model["S3: models"]
@@ -45,10 +45,10 @@ flowchart TB
     User -- "sign-up / login" --> Cognito
     Cognito -- "JWT" --> User
 
-    User -- "POST presigned URL request<br/>Authorization: Bearer JWT" --> APIGW
+    User -- "POST /uploads/presign<br/>Authorization: Bearer JWT" --> APIGW
     APIGW -- "verifies JWT" --> Cognito
     APIGW -- "invokes" --> UCheckLam
-    UCheckLam -- "checks dedup" --> DDB
+    UCheckLam -- "dedup check + seed record" --> DDB
     UCheckLam -- "issues presigned URL" --> User
 
     User -- "PUT file" --> S3Up
@@ -133,7 +133,7 @@ The brief requires "official architecture icons for all involved cloud providers
 - Cognito as the single auth provider (a callout arrow from Azure to Cognito's JWKS makes the cross-cloud trust visible).
 - The CQRS split labelled explicitly (a vertical divider with "write side" / "read side" labels).
 - The presigned-URL upload (browser PUTs to S3 directly, not through API Gateway).
-- The dedup check (the `/uploads/check` Lambda reads DynamoDB).
+- The dedup check (the `/uploads/presign` Lambda reads DynamoDB, then seeds the metadata record).
 - The aggregator's role for videos (it sits on the streams, not on S3 events).
 
 ### Don't show

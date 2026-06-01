@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Aussie EcoLens — S3 buckets, API Gateway, and the /uploads/check Lambda.
+  Aussie EcoLens — S3 buckets, API Gateway, and the /uploads/presign Lambda.
   Owned by P1 (Adam). Depends on the aussie-ecolens-auth stack for Cognito IDs.
 
 Parameters:
@@ -152,7 +152,7 @@ Resources:
                 aws:SecureTransport: "false"
 
   # ---------------------------------------------------------------------------
-  # /uploads/check Lambda - IAM role
+  # /uploads/presign Lambda - IAM role
   # ---------------------------------------------------------------------------
 
   UploadsCheckRole:
@@ -179,19 +179,24 @@ Resources:
                 Resource: !Sub "${UploadsBucket.Arn}/*"
         - !If
           - HasDynamoTable
-          - PolicyName: DedupRead
+          - PolicyName: DedupAndSeedRecord
             PolicyDocument:
               Version: "2012-10-17"
               Statement:
+                # GetItem for the dedup check; PutItem to seed the metadata
+                # record (owner/filename/mime/size) so it's populated before
+                # the tagger runs. The seed PutItem is condition-guarded
+                # (attribute_not_exists) so it never overwrites tagger output.
                 - Effect: Allow
                   Action:
                     - dynamodb:GetItem
+                    - dynamodb:PutItem
                     - dynamodb:Query
                   Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}"
           - !Ref AWS::NoValue
 
   # ---------------------------------------------------------------------------
-  # /uploads/check Lambda - function
+  # /uploads/presign Lambda - function
   # ---------------------------------------------------------------------------
 
   UploadsCheckFunction:
@@ -211,16 +216,20 @@ Resources:
           PRESIGN_TTL_SECONDS: "300"
       Code:
         ZipFile: |
+          import base64
           import json
           import os
-          from urllib.parse import quote
+          from datetime import datetime, timezone
+
           import boto3
           from botocore.config import Config
+          from botocore.exceptions import ClientError
 
           BUCKET = os.environ["UPLOADS_BUCKET"]
           TABLE = os.environ.get("DDB_TABLE") or None
           MAX_BYTES = int(os.environ.get("MAX_BYTES", "104857600"))
           PRESIGN_TTL = int(os.environ.get("PRESIGN_TTL_SECONDS", "300"))
+          REGION = os.environ.get("AWS_REGION", "ap-southeast-2")
 
           MIME_TO_EXT = {
               "image/jpeg": "jpg",
@@ -233,6 +242,7 @@ Resources:
           s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
           ddb = boto3.client("dynamodb") if TABLE else None
 
+
           def _response(status, body):
               return {
                   "statusCode": status,
@@ -243,80 +253,125 @@ Resources:
                   "body": json.dumps(body),
               }
 
+
+          def _error(status, code, message):
+              return _response(status, {"error": {"code": code, "message": message}})
+
+
           def _user_sub(event):
               try:
                   return event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
               except (KeyError, TypeError):
                   return None
 
+
+          def _parse_body(event):
+              raw = event.get("body") or ""
+              if event.get("isBase64Encoded"):
+                  raw = base64.b64decode(raw).decode("utf-8")
+              return json.loads(raw) if raw else {}
+
+
+          def _tags_to_map(attr):
+              out = {}
+              for name, val in (attr or {}).get("M", {}).items():
+                  if "N" in val:
+                      out[name] = int(val["N"])
+              return out
+
+
           def handler(event, _context):
-              params = event.get("queryStringParameters") or {}
-              sha = (params.get("hash") or "").lower()
-              mime = params.get("mime") or ""
-              size_str = params.get("size") or "0"
-
-              if len(sha) != 64 or not all(c in "0123456789abcdef" for c in sha):
-                  return _response(400, {"error": "hash must be a 64-char hex SHA-256"})
-
-              if mime not in MIME_TO_EXT:
-                  return _response(400, {
-                      "error": "unsupported mime",
-                      "allowed": list(MIME_TO_EXT.keys()),
-                  })
-
-              try:
-                  size = int(size_str)
-              except ValueError:
-                  return _response(400, {"error": "size must be an integer"})
-              if size <= 0 or size > MAX_BYTES:
-                  return _response(400, {
-                      "error": "size out of range",
-                      "max_bytes": MAX_BYTES,
-                  })
-
               sub = _user_sub(event)
               if not sub:
-                  return _response(401, {"error": "no user identity"})
+                  return _error(401, "UNAUTHORIZED", "no user identity")
 
+              try:
+                  body = _parse_body(event)
+              except (ValueError, TypeError):
+                  return _error(400, "BAD_REQUEST", "body must be valid JSON")
+
+              sha = str(body.get("sha256") or "").lower()
+              filename = str(body.get("filename") or "")
+              mime = str(body.get("mime_type") or "")
+              size = body.get("size_bytes")
+
+              if len(sha) != 64 or not all(c in "0123456789abcdef" for c in sha):
+                  return _error(400, "BAD_REQUEST", "sha256 must be a 64-char hex string")
+              if mime not in MIME_TO_EXT:
+                  return _error(400, "BAD_REQUEST",
+                                "unsupported mime_type; allowed: " + ", ".join(MIME_TO_EXT))
+              if not isinstance(size, int) or isinstance(size, bool) or size <= 0 or size > MAX_BYTES:
+                  return _error(400, "BAD_REQUEST",
+                                "size_bytes must be an integer in 1.." + str(MAX_BYTES))
+
+              ext = MIME_TO_EXT[mime]
+              key = f"{sub}/{sha}.{ext}"
+              s3_url = f"https://{BUCKET}.s3.{REGION}.amazonaws.com/{key}"
+              file_type = "video" if mime.startswith("video/") else "image"
+
+              # Dedup: a record already exists for this content -> don't re-upload/re-tag.
               if ddb:
                   try:
                       got = ddb.get_item(
                           TableName=TABLE,
-                          Key={
-                              "pk": {"S": f"FILE#{sha}"},
-                              "sk": {"S": "METADATA"},
-                          },
+                          Key={"pk": {"S": f"FILE#{sha}"}, "sk": {"S": "METADATA"}},
                       )
                       if "Item" in got:
                           item = got["Item"]
                           return _response(200, {
-                              "already_uploaded": True,
+                              "duplicate": True,
+                              "file_id": sha,
                               "existing_url": item.get("s3_url", {}).get("S"),
-                              "thumbnail_url": item.get("thumbnail_url", {}).get("S"),
+                              "tags": _tags_to_map(item.get("tags")),
                           })
-                  except Exception as e:
-                      print(f"dedup check failed (proceeding): {e!r}")
+                  except Exception as e:  # noqa: BLE001 - dedup is best-effort
+                      print(f"dedup check failed (proceeding as new): {e!r}")
 
-              ext = MIME_TO_EXT[mime]
-              key = f"{sub}/{sha}.{ext}"
               url = s3.generate_presigned_url(
                   ClientMethod="put_object",
-                  Params={
-                      "Bucket": BUCKET,
-                      "Key": key,
-                      "ContentType": mime,
-                  },
+                  Params={"Bucket": BUCKET, "Key": key, "ContentType": mime},
                   ExpiresIn=PRESIGN_TTL,
                   HttpMethod="PUT",
               )
 
+              # Seed the metadata record so owner/filename/mime/size are populated before
+              # the tagger runs. ConditionExpression keeps it idempotent and guarantees we
+              # never overwrite an existing record -- the tagger uses update_item to merge
+              # in its own fields (tags, thumbnail_url, file_type), so the two writes
+              # never clobber each other.
+              if ddb:
+                  now = datetime.now(timezone.utc).isoformat()
+                  try:
+                      ddb.put_item(
+                          TableName=TABLE,
+                          Item={
+                              "pk": {"S": f"FILE#{sha}"},
+                              "sk": {"S": "METADATA"},
+                              "file_id": {"S": sha},
+                              "owner_sub": {"S": sub},
+                              "file_type": {"S": file_type},
+                              "mime_type": {"S": mime},
+                              "original_filename": {"S": filename or f"{sha}.{ext}"},
+                              "s3_key": {"S": key},
+                              "s3_url": {"S": s3_url},
+                              "size_bytes": {"N": str(size)},
+                              "status": {"S": "pending"},
+                              "uploaded_at": {"S": now},
+                              "gsi2pk": {"S": f"OWNER#{sub}"},
+                              "gsi2sk": {"S": f"UPLOADED#{now}"},
+                          },
+                          ConditionExpression="attribute_not_exists(pk)",
+                      )
+                  except ClientError as e:
+                      if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                          print(f"seed write failed (proceeding): {e!r}")
+                      # else: record already exists (race / tagger first) -> leave it.
+
               return _response(200, {
-                  "already_uploaded": False,
-                  "presigned_url": url,
-                  "key": key,
-                  "bucket": BUCKET,
+                  "duplicate": False,
+                  "upload_url": url,
+                  "file_id": sha,
                   "expires_in": PRESIGN_TTL,
-                  "content_type": mime,
               })
 
   # ---------------------------------------------------------------------------
@@ -361,7 +416,7 @@ Resources:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
-      RouteKey: "GET /uploads/check"
+      RouteKey: "POST /uploads/presign"
       AuthorizationType: JWT
       AuthorizerId: !Ref CognitoAuthorizer
       Target: !Sub "integrations/${UploadsCheckIntegration}"
@@ -372,7 +427,7 @@ Resources:
       FunctionName: !Ref UploadsCheckFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/uploads/check"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/uploads/presign"
 
   HttpApiStage:
     Type: AWS::ApiGatewayV2::Stage
@@ -396,4 +451,4 @@ Outputs:
     Description: VITE_API_BASE_URL
   UploadsCheckRoleArn:
     Value: !GetAtt UploadsCheckRole.Arn
-    Description: IAM role ARN for the /uploads/check Lambda
+    Description: IAM role ARN for the /uploads/presign Lambda
