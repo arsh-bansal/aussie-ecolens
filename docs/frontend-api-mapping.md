@@ -102,10 +102,15 @@ exactly, so `api.presign()` works without frontend changes.
    `{duplicate:true, existing_url, tags}` and skips re-upload/re-tag.
 2. **Presigned PUT** — issues the 5-min direct-to-S3 URL.
 3. **Seed metadata record** — `PutItem` of `FILE#<sha256>/METADATA` with
-   `owner_sub`, `mime_type`, `original_filename`, `size_bytes`, `s3_key`,
-   `s3_url`, `file_type`, `status: pending`, `uploaded_at`, and the `gsi2`
-   owner-index keys. Guarded by `attribute_not_exists(pk)` so it is idempotent
-   and **never overwrites** an existing record.
+   `user_id` (the Cognito sub), `checksum`, `mime_type`, `original_filename`,
+   `size_bytes`, `s3_key`, `s3_url` (`s3://` URI), `file_type`,
+   `status: pending`, `uploaded_at`. Guarded by `attribute_not_exists(pk)` so
+   it is idempotent and **never overwrites** an existing record. Field names
+   match the **live** `aussie-ecolens-files` table and the Azure query API
+   (both use `user_id` = Cognito sub and `checksum` for the sha; the existing
+   `user_id-index` GSI is populated automatically by `user_id` + `uploaded_at`).
+   This supersedes the `owner_sub`/`gsi2*` names in `docs/data-model.md`, which
+   are stale relative to what's deployed — see the reconciliation note below.
 
 **Coordination with the tagger (P2 / Arsh):** presign seeds the record; the
 tagger must use `update_item` (merge) to add only its own fields (`tags`,
@@ -120,14 +125,24 @@ The dedup check reads the same `FILE#<sha>/METADATA` item that the seed-write
 creates. Before this change nothing wrote that item, so a second upload of the
 same file could never be detected. The seed-write closes that loop.
 
-### Dependency / not-yet-testable
+### Dependency / not-yet-deployed
 
-The Lambda is gated on `DDB_TABLE`: with no table set it skips both the dedup
-read and the seed write (treats every file as new, writes nothing) and still
-returns a working presigned URL. So **dedup + metadata only function once P3's
-DynamoDB table exists** and the infra stack is redeployed with
-`DynamoTableName=<table>`. Until then this is implemented but unverified
-end to end.
+The Lambda is gated on `DDB_TABLE`: with that env var blank it skips both the
+dedup read and the seed write (treats every file as new, writes nothing) and
+still returns a working presigned URL.
+
+Live state (checked 2026-06-01): the `aussie-ecolens-files` table **exists and
+is ACTIVE** (36 items, Streams on) — created by hand, not yet in any IaC
+template. But the **deployed** `uploads-check` Lambda is the old May-28 code
+with `DDB_TABLE=""`, so dedup + seed are NOT live yet. To switch them on:
+redeploy this stack (which replaces the Lambda with the `POST /uploads/presign`
+code) with `DynamoTableName=aussie-ecolens-files`.
+
+Two open schema items for the team (see Discord) before/at redeploy:
+- The live table has only the `user_id-index` GSI; the contract's by-tag and
+  by-thumbnail indexes don't exist yet, so those query paths have no index.
+- The table isn't in CloudFormation/SAM anywhere — someone should capture it as
+  IaC so it survives teardown/redeploy.
 
 ## 5. Env vars the frontend reads
 

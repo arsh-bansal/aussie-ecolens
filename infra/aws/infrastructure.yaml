@@ -229,7 +229,6 @@ Resources:
           TABLE = os.environ.get("DDB_TABLE") or None
           MAX_BYTES = int(os.environ.get("MAX_BYTES", "104857600"))
           PRESIGN_TTL = int(os.environ.get("PRESIGN_TTL_SECONDS", "300"))
-          REGION = os.environ.get("AWS_REGION", "ap-southeast-2")
 
           MIME_TO_EXT = {
               "image/jpeg": "jpg",
@@ -306,7 +305,9 @@ Resources:
 
               ext = MIME_TO_EXT[mime]
               key = f"{sub}/{sha}.{ext}"
-              s3_url = f"https://{BUCKET}.s3.{REGION}.amazonaws.com/{key}"
+              # s3:// URI form matches what the tagger writes + the replicator
+              # mirrors to Cosmos (the team's live convention).
+              s3_url = f"s3://{BUCKET}/{key}"
               file_type = "video" if mime.startswith("video/") else "image"
 
               # Dedup: a record already exists for this content -> don't re-upload/re-tag.
@@ -335,10 +336,13 @@ Resources:
               )
 
               # Seed the metadata record so owner/filename/mime/size are populated before
-              # the tagger runs. ConditionExpression keeps it idempotent and guarantees we
-              # never overwrite an existing record -- the tagger uses update_item to merge
-              # in its own fields (tags, thumbnail_url, file_type), so the two writes
-              # never clobber each other.
+              # the tagger runs. Field names match the LIVE table + the query API
+              # (verified 2026-06-01): owner is `user_id` = Cognito sub; the sha is
+              # `checksum`; `user_id`+`uploaded_at` populate the existing
+              # `user_id-index` GSI automatically. ConditionExpression keeps it
+              # idempotent and guarantees we never overwrite an existing record --
+              # the tagger uses update_item to merge its own fields (tags,
+              # thumbnail_url, file_type), so the two writes never clobber each other.
               if ddb:
                   now = datetime.now(timezone.utc).isoformat()
                   try:
@@ -347,8 +351,8 @@ Resources:
                           Item={
                               "pk": {"S": f"FILE#{sha}"},
                               "sk": {"S": "METADATA"},
-                              "file_id": {"S": sha},
-                              "owner_sub": {"S": sub},
+                              "checksum": {"S": sha},
+                              "user_id": {"S": sub},
                               "file_type": {"S": file_type},
                               "mime_type": {"S": mime},
                               "original_filename": {"S": filename or f"{sha}.{ext}"},
@@ -357,8 +361,6 @@ Resources:
                               "size_bytes": {"N": str(size)},
                               "status": {"S": "pending"},
                               "uploaded_at": {"S": now},
-                              "gsi2pk": {"S": f"OWNER#{sub}"},
-                              "gsi2sk": {"S": f"UPLOADED#{now}"},
                           },
                           ConditionExpression="attribute_not_exists(pk)",
                       )
