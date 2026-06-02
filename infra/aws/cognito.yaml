@@ -75,11 +75,11 @@ Resources:
 
 Outputs:
   UserPoolId:
-    Description: Paste into VITE_COGNITO_USER_POOL_ID
+    Description: Paste into NEXT_PUBLIC_COGNITO_USER_POOL_ID
     Value: !Ref UserPool
   AppClientId:
-    Description: Paste into VITE_COGNITO_CLIENT_ID
+    Description: Paste into NEXT_PUBLIC_COGNITO_APP_CLIENT_ID
     Value: !Ref AppClient
   Region:
-    Description: Paste into VITE_AWS_REGION
+    Description: Paste into NEXT_PUBLIC_AWS_REGION
     Value: !Ref AWS::Region
