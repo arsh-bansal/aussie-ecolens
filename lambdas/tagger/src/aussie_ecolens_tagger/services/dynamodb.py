@@ -75,36 +75,59 @@ class DynamoDBService:
         )
 
     def put_tag_result(self, result: TagResult) -> None:
-        """Persist a TagResult as a single PutItem in the shared contract shape.
+        """Merge a TagResult into the file's record via UpdateItem.
 
-        Idempotent: the pk is FILE#<sha>, so re-tagging the same upload
-        overwrites the previous record with refreshed tags/timestamp. S3 may
-        deliver the same event twice; that is harmless here.
+        The record (pk=FILE#<sha>, sk=METADATA) is shared: the upload/presign
+        step seeds it with upload metadata (user_id, mime_type,
+        original_filename, size_bytes, status, ...), and this tagger then adds
+        the ML fields. We therefore UPDATE rather than PutItem - a PutItem would
+        be a full-record replace and would wipe the seeded metadata.
+
+        Field ownership:
+        - Tagger SETs (authoritative): tags, file_type, thumbnail_url,
+          n_detections, n_classified, n_below_threshold, updated_at, status.
+        - Tagger sets-if-absent: user_id, checksum, s3_url, uploaded_at. If the
+          seed exists, its values win; if the tagger fires with no seed (e.g. an
+          object that did not go through presign), they are still populated so
+          the record is self-consistent.
+        - Tagger never touches: mime_type, original_filename, size_bytes (the
+          upload side owns these exclusively).
+
+        UpdateItem still emits a DynamoDB Stream record (NewImage), so the
+        replicator and notifier continue to fire unchanged. Idempotent: the key
+        is FILE#<sha>, so re-tagging refreshes the tagger-owned fields only.
 
         Args:
             result: TagResult produced by the pipeline.
 
         Raises:
-            PersistenceError: if dry_run is False and the underlying
-                PutItem call fails for any reason.
+            PersistenceError: if dry_run is False and the UpdateItem fails.
         """
-        item = self._to_item(result)
+        update = self._to_update(result)
 
         if self._dry_run:
-            log.info("DRY_RUN dynamodb put_item skipped", item_keys=list(item.keys()))
+            log.info(
+                "DRY_RUN dynamodb update_item skipped",
+                pk=update["key"]["pk"]["S"],
+            )
             return
 
         try:
-            self._client.put_item(TableName=self._table_name, Item=item)
+            self._client.update_item(
+                TableName=self._table_name,
+                Key=update["key"],
+                UpdateExpression=update["expression"],
+                ExpressionAttributeNames=update["names"],
+                ExpressionAttributeValues=update["values"],
+            )
         except Exception as e:  # noqa: BLE001 -- rewrap as typed error
             raise PersistenceError(
-                f"dynamodb put_item failed for {result.s3_key}: {e}"
+                f"dynamodb update_item failed for {result.s3_key}: {e}"
             ) from e
         log.info(
-            "dynamodb put_item complete",
-            pk=item["pk"]["S"],
-            user_id=item["user_id"]["S"],
-            tags=list(item["tags"]["M"].keys()),
+            "dynamodb update_item complete",
+            pk=update["key"]["pk"]["S"],
+            tags=list(update["tag_names"]),
         )
 
     @staticmethod
@@ -126,16 +149,12 @@ class DynamoDBService:
         return user_id, sha, file_type
 
     @classmethod
-    def _to_item(cls, result: TagResult) -> dict[str, dict[str, Any]]:
-        """Convert a TagResult to the shared-contract DynamoDB item.
+    def _to_update(cls, result: TagResult) -> dict[str, Any]:
+        """Build the UpdateItem pieces (key, expression, names, values).
 
-        - pk = FILE#<sha> (sha parsed from the S3 key; valid Cosmos id)
-        - user_id parsed from the key (Cosmos partition key, GSI hash)
-        - tags translated from Latin species ids to common names
-
-        Encodes Python types into DynamoDB's typed JSON shape:
-            str -> {"S": value}; int -> {"N": str(value)};
-            dict[str,int] -> {"M": {k: {"N": str(v)}}}; null -> {"NULL": True}
+        Uses SET for tagger-owned fields and if_not_exists() for seed-shared
+        fields so the upload side's values are preserved when present. Reserved
+        words (status, tags) are aliased via ExpressionAttributeNames.
         """
         user_id, sha, file_type = cls._parse_key(result.s3_key)
         now = _iso_utc_now()
@@ -146,12 +165,8 @@ class DynamoDBService:
             name = common_name(latin)
             common_tags[name] = common_tags.get(name, 0) + count
 
-        # thumbnail_url: for IMAGES, point at the deterministic thumbnail key
-        # (s3://<thumbnails_bucket>/<sha>.jpg) that the thumbnail Lambda writes.
-        # The path is a pure function of the sha, so we set it here without any
-        # coordination with that Lambda (it just has to create the object). For
-        # VIDEOS there is no thumbnail (queries return the full video URL), so
-        # the field stays NULL.
+        # thumbnail_url: deterministic thumbnail key for images; NULL for videos
+        # (videos return the full URL on query, not a thumbnail).
         if file_type == "image":
             thumbnail_av: dict[str, Any] = {
                 "S": f"s3://{settings.thumbnails_bucket}/{sha}.jpg"
@@ -159,25 +174,52 @@ class DynamoDBService:
         else:
             thumbnail_av = {"NULL": True}
 
+        tags_av = {"M": {name: {"N": str(c)} for name, c in common_tags.items()}}
+
+        # SET clauses. #alias for reserved words (status, tags). Tagger-owned
+        # fields are assigned directly; seed-shared fields use if_not_exists so
+        # the presign seed wins when it is present.
+        set_clauses = [
+            "#tags = :tags",
+            "file_type = :file_type",
+            "thumbnail_url = :thumbnail_url",
+            "n_detections = :n_detections",
+            "n_classified = :n_classified",
+            "n_below_threshold = :n_below_threshold",
+            "updated_at = :updated_at",
+            "#status = :status",
+            "user_id = if_not_exists(user_id, :user_id)",
+            "checksum = if_not_exists(checksum, :checksum)",
+            "s3_url = if_not_exists(s3_url, :s3_url)",
+            "uploaded_at = if_not_exists(uploaded_at, :uploaded_at)",
+        ]
+
+        names = {"#tags": "tags", "#status": "status"}
+        values = {
+            ":tags": tags_av,
+            ":file_type": {"S": file_type},
+            ":thumbnail_url": thumbnail_av,
+            ":n_detections": {"N": str(result.n_detections)},
+            ":n_classified": {"N": str(result.n_classified)},
+            ":n_below_threshold": {"N": str(result.n_below_threshold)},
+            ":updated_at": {"S": now},
+            ":status": {"S": "tagged"},
+            ":user_id": {"S": user_id},
+            ":checksum": {"S": sha},
+            ":s3_url": {"S": f"s3://{result.s3_bucket}/{result.s3_key}"},
+            ":uploaded_at": {"S": now},
+        }
+
         return {
-            "pk": {"S": f"FILE#{sha}"},
-            "sk": {"S": "METADATA"},
-            "user_id": {"S": user_id},
-            "checksum": {"S": sha},
-            "file_type": {"S": file_type},
-            "s3_url": {"S": f"s3://{result.s3_bucket}/{result.s3_key}"},
-            "thumbnail_url": thumbnail_av,
-            "tags": {
-                "M": {name: {"N": str(c)} for name, c in common_tags.items()}
-            },
-            "n_detections": {"N": str(result.n_detections)},
-            "n_classified": {"N": str(result.n_classified)},
-            "n_below_threshold": {"N": str(result.n_below_threshold)},
-            "uploaded_at": {"S": now},
-            "updated_at": {"S": now},
+            "key": {"pk": {"S": f"FILE#{sha}"}, "sk": {"S": "METADATA"}},
+            "expression": "SET " + ", ".join(set_clauses),
+            "names": names,
+            "values": values,
+            "tag_names": list(common_tags.keys()),
         }
 
 
 def _iso_utc_now() -> str:
     """Current UTC time as an ISO-8601 string suitable for DynamoDB."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    

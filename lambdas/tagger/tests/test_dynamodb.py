@@ -55,60 +55,91 @@ class TestParseKey:
         assert sha == "abc.def" or "/" not in sha
 
 
-class TestToItem:
-    def test_pk_is_file_hash_sha_not_raw_key(self) -> None:
-        item = DynamoDBService._to_item(
+class TestToUpdate:
+    """The tagger MERGES into the shared record via UpdateItem (it must not
+    PutItem-clobber the upload/presign seed). These lock the key, the tagger-
+    owned SET fields, and the if_not_exists() guard on seed-shared fields.
+    """
+
+    def test_key_is_file_hash_sha_not_raw_key(self) -> None:
+        u = DynamoDBService._to_update(
             _result("user-1/cassowary002.JPG", {"Casuarius_casuarius": 1})
         )
-        assert item["pk"]["S"] == "FILE#cassowary002"
-        assert "/" not in item["pk"]["S"]  # valid Cosmos id
-        assert item["sk"]["S"] == "METADATA"
+        assert u["key"]["pk"]["S"] == "FILE#cassowary002"
+        assert "/" not in u["key"]["pk"]["S"]  # valid Cosmos id
+        assert u["key"]["sk"]["S"] == "METADATA"
 
-    def test_user_id_parsed_from_key(self) -> None:
-        item = DynamoDBService._to_item(
-            _result("cognito-xyz/img.JPG", {"Bos_taurus": 2})
-        )
-        assert item["user_id"]["S"] == "cognito-xyz"
-        assert item["checksum"]["S"] == "img"
+    def test_uses_update_not_full_replace(self) -> None:
+        # The expression must be a SET update, not a put of the whole item.
+        u = DynamoDBService._to_update(_result("u1/x.JPG", {"Bos_taurus": 1}))
+        assert u["expression"].startswith("SET ")
 
     def test_tags_translated_to_common_names(self) -> None:
-        item = DynamoDBService._to_item(
+        u = DynamoDBService._to_update(
             _result("u1/x.JPG", {"Casuarius_casuarius": 1})
         )
-        assert item["tags"]["M"] == {"Southern Cassowary": {"N": "1"}}
+        assert u["values"][":tags"]["M"] == {"Southern Cassowary": {"N": "1"}}
 
-    def test_s3_url_assembled(self) -> None:
-        item = DynamoDBService._to_item(
-            _result("u1/x.JPG", {"Canis_familiaris": 1})
-        )
-        assert item["s3_url"]["S"] == "s3://aussie-ecolens-uploads-123/u1/x.JPG"
+    def test_reserved_words_aliased(self) -> None:
+        # 'tags' and 'status' are DynamoDB reserved words; must be aliased.
+        u = DynamoDBService._to_update(_result("u1/x.JPG", {"Bos_taurus": 1}))
+        assert u["names"]["#tags"] == "tags"
+        assert u["names"]["#status"] == "status"
+        assert "#tags = :tags" in u["expression"]
+
+    def test_seed_fields_use_if_not_exists(self) -> None:
+        # user_id/checksum/s3_url/uploaded_at must NOT clobber a presign seed:
+        # they are written only if absent.
+        u = DynamoDBService._to_update(_result("cognito-xyz/img.JPG", {"Bos_taurus": 2}))
+        expr = u["expression"]
+        assert "user_id = if_not_exists(user_id, :user_id)" in expr
+        assert "checksum = if_not_exists(checksum, :checksum)" in expr
+        assert "s3_url = if_not_exists(s3_url, :s3_url)" in expr
+        assert "uploaded_at = if_not_exists(uploaded_at, :uploaded_at)" in expr
+
+    def test_tagger_owned_fields_set_unconditionally(self) -> None:
+        # file_type / thumbnail_url / counts / updated_at are the tagger's to
+        # own, so they are assigned directly (no if_not_exists).
+        u = DynamoDBService._to_update(_result("u1/x.JPG", {"Bos_taurus": 1}))
+        expr = u["expression"]
+        assert "file_type = :file_type" in expr
+        assert "thumbnail_url = :thumbnail_url" in expr
+        assert "updated_at = :updated_at" in expr
+
+    def test_does_not_touch_upload_only_fields(self) -> None:
+        # mime_type / original_filename / size_bytes belong to the upload side
+        # exclusively; the tagger must never reference them.
+        u = DynamoDBService._to_update(_result("u1/x.JPG", {"Bos_taurus": 1}))
+        blob = u["expression"] + str(u["values"]) + str(u["names"])
+        assert "mime_type" not in blob
+        assert "original_filename" not in blob
+        assert "size_bytes" not in blob
+
+    def test_s3_url_value_assembled(self) -> None:
+        u = DynamoDBService._to_update(_result("u1/x.JPG", {"Canis_familiaris": 1}))
+        assert u["values"][":s3_url"]["S"] == "s3://aussie-ecolens-uploads-123/u1/x.JPG"
 
     def test_thumbnail_url_set_for_images(self) -> None:
-        # Images get a deterministic thumbnail URL derived from the sha.
-        item = DynamoDBService._to_item(_result("u1/abc123.JPG", {"Bos_taurus": 1}))
-        assert item["file_type"]["S"] == "image"
-        assert item["thumbnail_url"]["S"].startswith("s3://")
-        assert item["thumbnail_url"]["S"].endswith("/abc123.jpg")
+        u = DynamoDBService._to_update(_result("u1/abc123.JPG", {"Bos_taurus": 1}))
+        assert u["values"][":file_type"]["S"] == "image"
+        assert u["values"][":thumbnail_url"]["S"].startswith("s3://")
+        assert u["values"][":thumbnail_url"]["S"].endswith("/abc123.jpg")
 
     def test_thumbnail_url_null_for_videos(self) -> None:
-        # Videos have no thumbnail (queries return the full video URL).
-        item = DynamoDBService._to_item(_result("u1/clip.mp4", {"Bos_taurus": 1}))
-        assert item["file_type"]["S"] == "video"
-        assert item["thumbnail_url"] == {"NULL": True}
+        u = DynamoDBService._to_update(_result("u1/clip.mp4", {"Bos_taurus": 1}))
+        assert u["values"][":file_type"]["S"] == "video"
+        assert u["values"][":thumbnail_url"] == {"NULL": True}
 
-    def test_empty_tags_still_writes_record(self) -> None:
-        # Zero-animal uploads: the record must still be written with tags {}.
-        item = DynamoDBService._to_item(_result("u1/empty.JPG", {}))
-        assert item["pk"]["S"] == "FILE#empty"
-        assert item["user_id"]["S"] == "u1"
-        assert item["tags"]["M"] == {}
-        assert item["n_detections"]["N"] == "0"
+    def test_empty_tags_still_updates(self) -> None:
+        # Zero-animal uploads: the record must still be tagged with tags {}.
+        u = DynamoDBService._to_update(_result("u1/empty.JPG", {}))
+        assert u["key"]["pk"]["S"] == "FILE#empty"
+        assert u["values"][":tags"]["M"] == {}
+        assert u["values"][":n_detections"]["N"] == "0"
 
     def test_two_latin_ids_same_common_name_sum(self) -> None:
-        # Defensive: if two Latin ids ever map to one common name, counts sum
-        # rather than one clobbering the other.
-        item = DynamoDBService._to_item(
+        u = DynamoDBService._to_update(
             _result("u1/x.JPG", {"Casuarius_casuarius": 1})
         )
-        # Single mapping here; assert the count survived translation.
-        assert item["tags"]["M"]["Southern Cassowary"]["N"] == "1"
+        assert u["values"][":tags"]["M"]["Southern Cassowary"]["N"] == "1"
+        
