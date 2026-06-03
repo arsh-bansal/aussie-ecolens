@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Aussie EcoLens — Query API (Rachana)
@@ -38,16 +38,16 @@ Globals:
     MemorySize: 512
     Environment:
       Variables:
-        COSMOS_ENDPOINT: !Ref CosmosEndpoint
-        COSMOS_KEY: !Ref CosmosKey
-        COSMOS_DATABASE: !Ref CosmosDatabase
-        COSMOS_CONTAINER: !Ref CosmosContainer
-        COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
-        COGNITO_CLIENT_ID: !Ref CognitoClientId
-        AWS_REGION_NAME: !Ref AWS::Region
-        S3_BUCKET_NAME: aussie-ecolens-uploads-247622885425
-        TAGGER_LAMBDA_NAME: !Ref TaggerLambdaName
-        DYNAMODB_TABLE: aussie-ecolens-files
+        COSMOS_ENDPOINT:       !Ref CosmosEndpoint
+        COSMOS_KEY:            !Ref CosmosKey
+        COSMOS_DATABASE:       !Ref CosmosDatabase
+        COSMOS_CONTAINER:      !Ref CosmosContainer
+        COGNITO_USER_POOL_ID:  !Ref CognitoUserPoolId
+        COGNITO_CLIENT_ID:     !Ref CognitoClientId
+        AWS_REGION_NAME:       !Ref AWS::Region
+        S3_BUCKET_NAME:        aussie-ecolens-uploads-247622885425
+        TAGGER_LAMBDA_NAME:    !Ref TaggerLambdaName
+        DYNAMODB_TABLE:        aussie-ecolens-files
 
 Resources:
   QueryApi:
@@ -79,6 +79,9 @@ Resources:
       Policies:
         - S3CrudPolicy:
             BucketName: aussie-ecolens-uploads-247622885425
+        # delete also removes the thumbnail, which lives in a separate bucket
+        - S3CrudPolicy:
+            BucketName: aussie-ecolens-thumbnails-247622885425
         - Statement:
             - Effect: Allow
               Action: lambda:InvokeFunction
