@@ -1,173 +1,143 @@
 'use client';
 
 import { useState } from 'react';
-import { Bell, CheckCircle2, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
-import { AUSTRALIAN_SPECIES, slugToLabel } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext';
-import FloatingLeaves from '@/components/FloatingLeaves';
 
-/* Animal emoji per species (rough mapping — defaults to 🐾) */
-const SPECIES_EMOJI: Record<string, string> = {
-  koala: '🐨', kangaroo: '🦘', wombat: '🦡', echidna: '🦔',
-  quokka: '🦘', platypus: '🦆', possum: '🐿️', wallaby: '🦘',
-  emu: '🦤', kookaburra: '🐦', dingo: '🐺', cassowary: '🦤',
-  cockatoo: '🦜', 'flying-fox': '🦇', bilby: '🐇', numbat: '🦡',
-  tasmanian_devil: '😈', quoll: '🐾', bandicoot: '🐭', glider: '🦅',
-};
-const getEmoji = (slug: string) => {
-  const key = Object.keys(SPECIES_EMOJI).find((k) => slug.includes(k));
-  return key ? SPECIES_EMOJI[key] : '🐾';
-};
+const PRESET_SPECIES = [
+  { name: 'Southern Cassowary', tag: 'cassowary', icoStyle: { background: 'var(--gold-soft)', color: 'var(--gold)' } },
+  { name: 'Koala', tag: 'koala', icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' } },
+  { name: 'Red Fox (invasive)', tag: 'fox', icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' } },
+  { name: 'Feral Cat (invasive)', tag: 'cat', icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' } },
+  { name: 'Quokka', tag: 'quokka', icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' } },
+  { name: 'Low-confidence digest', tag: 'low-confidence', icoStyle: { background: 'oklch(0.20 0.012 48)', color: 'var(--ink-faint)' } },
+];
 
 export default function NotificationsPage() {
   const toast = useToast();
-  const { user } = useAuth();
-  const [subscribing, setSubscribing] = useState<string | null>(null);
-  const [subscribed, setSubscribed]   = useState<Set<string>>(new Set());
+  const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState<string | null>(null);
+  const [customTag, setCustomTag] = useState('');
 
-  const handleSubscribe = async (species: string) => {
-    setSubscribing(species);
+  const subscribe = async (tag: string) => {
+    setLoading(tag);
     try {
-      await api.subscribe({ tag: species });
-      setSubscribed((prev) => new Set(prev).add(species));
-      toast.success(`Subscribed to ${slugToLabel(species)} alerts! Check your email to confirm.`);
+      await api.subscribe({ tag });
+      setSubscribed(prev => new Set([...prev, tag]));
+      toast.success(`Subscribed to "${tag}" alerts via SNS.`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Subscription failed');
     } finally {
-      setSubscribing(null);
+      setLoading(null);
     }
   };
 
+  const handleCustom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customTag.trim()) return;
+    await subscribe(customTag.trim().toLowerCase());
+    setCustomTag('');
+  };
+
   return (
-    <div className="relative min-h-screen" style={{ background: 'var(--bg)' }}>
-      <FloatingLeaves />
-
-      <div className="relative z-10 px-6 lg:px-10 py-8 max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 page-enter">
-          <h1 className="text-4xl font-bold font-display mb-2" style={{ color: 'var(--text)' }}>
-            Species Alerts 🔔
-          </h1>
-          <p className="text-sm" style={{ color: 'var(--muted)' }}>
-            Subscribe to receive email notifications via AWS SNS when new sightings are catalogued.
-          </p>
-        </div>
-
-        {/* Info card */}
-        <div
-          className="mb-8 rounded-2xl p-5 page-enter-1"
-          style={{ background: 'var(--nav-active-bg)', border: '1px solid var(--border)', borderLeft: '3px solid var(--primary)' }}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-xl mt-0.5"
-              style={{ background: 'var(--primary)', color: '#fff' }}
-            >
-              <Bell className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-sm font-bold font-display mb-1" style={{ color: 'var(--text)' }}>
-                How alerts work 🦘
-              </p>
-              <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
-                Each species has a dedicated AWS SNS topic. Click &ldquo;Subscribe&rdquo; and{' '}
-                <strong style={{ color: 'var(--text)' }}>{user?.email}</strong> will be added.
-                AWS SNS sends a confirmation email — you must confirm it. After that, you&apos;ll receive
-                an alert whenever a new file tagged with that species is processed.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Species grid */}
+    <>
+      <header className="topbar">
         <div>
-          <h2
-            className="text-xs font-bold uppercase tracking-widest mb-5 flex items-center gap-2"
-            style={{ color: 'var(--muted)' }}
-          >
-            🦎 Australian Species ({AUSTRALIAN_SPECIES.length})
-          </h2>
+          <div className="page-title">Alerts</div>
+          <div className="page-sub">SNS email notifications when target species are spotted</div>
+        </div>
+      </header>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {AUSTRALIAN_SPECIES.map((species) => {
-              const isSub    = subscribed.has(species);
-              const isLoading = subscribing === species;
-              const emoji    = getEmoji(species);
+      <div className="page">
+        {/* Stats */}
+        <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+          {[
+            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/></svg>, icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' }, val: String(subscribed.size), label: 'Active subscriptions' },
+            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>, icoStyle: { background: 'var(--ochre-tint)', color: 'var(--ochre)' }, val: '—', label: 'Emails sent (30d)' },
+            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>, icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' }, val: '—', label: 'Triggered today' },
+          ].map(s => (
+            <div key={s.label} className="stat">
+              <div className="stat-ico" style={s.icoStyle}>{s.icon}</div>
+              <div className="stat-val">{s.val}</div>
+              <div className="stat-label">{s.label}</div>
+            </div>
+          ))}
+        </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: '20px', marginTop: '22px' }}>
+          {/* Subscribe to preset species */}
+          <div className="panel" style={{ alignSelf: 'start' }}>
+            <div className="panel-head"><h3>Alert rules</h3><span className="badge badge-mute" style={{ marginLeft: 'auto' }}>via AWS SNS</span></div>
+            {PRESET_SPECIES.map(({ name, tag, icoStyle }) => {
+              const isOn = subscribed.has(tag);
+              const isLoading = loading === tag;
               return (
-                <div
-                  key={species}
-                  className={`rounded-2xl p-3 transition-all duration-200 ${isSub ? 'subscribed-glow' : ''}`}
-                  style={{
-                    background:  isSub ? 'var(--nav-active-bg)' : 'var(--card)',
-                    border:      isSub ? '1.5px solid var(--primary-light)' : '1px solid var(--border)',
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <span className="text-xl">{emoji}</span>
-                    <p className="text-sm font-semibold leading-tight flex-1 min-w-0 truncate" style={{ color: 'var(--text)' }}>
-                      {slugToLabel(species)}
-                    </p>
-                    {isSub && <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--primary)' }} />}
+                <div key={tag} style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '17px 20px', borderBottom: '1px solid var(--line-soft)' }}>
+                  <span style={{ width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0, display: 'grid', placeItems: 'center', ...icoStyle }}>
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3c4 4 6 7 6 10a6 6 0 01-12 0c0-3 2-6 6-10z"/></svg>
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '14.5px' }}>{name}</div>
+                    <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)', marginTop: '3px', fontFamily: 'var(--font-mono)' }}>tag: {tag}</div>
                   </div>
-
-                  <button
-                    onClick={() => !isSub && handleSubscribe(species)}
-                    disabled={isSub || isLoading}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200"
-                    style={isSub
-                      ? { background: 'rgba(82,183,136,0.15)', color: 'var(--primary)', cursor: 'default' }
-                      : isLoading
-                      ? { background: 'var(--border)', color: 'var(--muted)', cursor: 'wait' }
-                      : { background: 'var(--input-bg)', color: 'var(--muted)', border: '1px solid var(--border)' }
-                    }
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : isSub ? (
-                      <><CheckCircle2 className="h-3 w-3" /> Subscribed</>
-                    ) : (
-                      <><Bell className="h-3 w-3" /> Subscribe</>
-                    )}
-                  </button>
+                  {isOn ? (
+                    <span className="badge badge-euc"><span className="dot" style={{ background: 'var(--euc)' }} />Subscribed</span>
+                  ) : (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => subscribe(tag)}
+                      disabled={isLoading}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {isLoading ? 'Subscribing…' : 'Subscribe'}
+                    </button>
+                  )}
                 </div>
               );
             })}
+
+            {/* Custom tag */}
+            <div style={{ padding: '18px 20px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--ink-faint)', marginBottom: '12px' }}>Subscribe to a custom species or tag:</p>
+              <form onSubmit={handleCustom} style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  className="input"
+                  placeholder="e.g. echidna, wombat…"
+                  value={customTag}
+                  onChange={e => setCustomTag(e.target.value)}
+                  style={{ flex: 1, padding: '10px 13px', fontSize: '14px' }}
+                />
+                <button className="btn btn-primary" type="submit" disabled={!customTag.trim() || !!loading}>
+                  {loading === customTag.trim() ? '…' : 'Subscribe'}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Info panel */}
+          <div className="panel" style={{ alignSelf: 'start' }}>
+            <div className="panel-head"><h3>How alerts work</h3></div>
+            <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {[
+                { icon: '📤', title: 'Upload media', desc: 'A camera trap image or video is uploaded and processed by MegaDetector + SpeciesNet.' },
+                { icon: '🔍', title: 'Species detected', desc: 'When a species matching your subscription tag is detected with ≥ 80% confidence, an event is triggered.' },
+                { icon: '📧', title: 'SNS email sent', desc: 'AWS SNS sends an email to your registered address with the detection details and thumbnail.' },
+              ].map(({ icon, title, desc }) => (
+                <div key={title} style={{ display: 'flex', gap: '14px', padding: '14px', borderRadius: 'var(--r-md)', background: 'var(--sand-50)' }}>
+                  <span style={{ fontSize: '22px', flexShrink: 0, lineHeight: 1.2 }}>{icon}</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '4px' }}>{title}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--ink-soft)', lineHeight: 1.5 }}>{desc}</div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--ochre-tint)', border: '1px solid var(--ochre-soft)', fontSize: '13px', color: 'var(--ink-soft)' }}>
+                Emails are sent to the address on your Cognito account. Make sure it is verified.
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Your subscriptions ("herd") */}
-        {subscribed.size > 0 && (
-          <div
-            className="mt-10 rounded-2xl p-6"
-            style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
-          >
-            <h3
-              className="text-sm font-bold font-display mb-4 flex items-center gap-2"
-              style={{ color: 'var(--text)' }}
-            >
-              🦘 Your herd ({subscribed.size})
-            </h3>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {Array.from(subscribed).map((s) => (
-                <span
-                  key={s}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                  style={{ background: 'var(--nav-active-bg)', color: 'var(--primary)', border: '1px solid var(--border)' }}
-                >
-                  {getEmoji(s)} {slugToLabel(s)}
-                </span>
-              ))}
-            </div>
-            <p className="text-xs" style={{ color: 'var(--muted)', opacity: 0.7 }}>
-              Remember to confirm each subscription via the email sent by AWS SNS.
-            </p>
-          </div>
-        )}
-
       </div>
-    </div>
+    </>
   );
 }

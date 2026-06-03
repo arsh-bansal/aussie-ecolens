@@ -73,30 +73,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      {/* Toast stack */}
-      <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm w-full">
-        {toasts.map((t) => {
-          const s = toastStyles[t.type];
-          return (
-            <div
-              key={t.id}
-              className={cn(
-                'pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg',
-                'backdrop-blur-md animate-slide-up text-sm',
-                s.bg, s.border
-              )}
-            >
-              <s.Icon className={cn('h-4 w-4 mt-0.5 flex-shrink-0', s.text)} />
-              <p className={cn('flex-1 leading-snug', s.text)}>{t.message}</p>
-              <button
-                onClick={() => dismiss(t.id)}
-                className={cn('flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity', s.text)}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          );
-        })}
+      <div className="toast-stack">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast toast-${t.type}`}>
+            <p>{t.message}</p>
+            <button onClick={() => dismiss(t.id)} aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          </div>
+        ))}
       </div>
     </ToastContext.Provider>
   );
