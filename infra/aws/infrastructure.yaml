@@ -1,0 +1,456 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Aussie EcoLens — S3 buckets, API Gateway, and the /uploads/presign Lambda.
+  Owned by P1 (Adam). Depends on the aussie-ecolens-auth stack for Cognito IDs.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: aussie-ecolens
+  UserPoolId:
+    Type: String
+    Description: >
+      Cognito User Pool ID from the aussie-ecolens-auth stack output.
+      Example - ap-southeast-2_1XdbAo4mu.
+  UserPoolClientId:
+    Type: String
+    Description: >
+      Cognito App Client ID from the aussie-ecolens-auth stack output.
+  DevOrigin:
+    Type: CommaDelimitedList
+    Default: "http://localhost:3000,http://localhost:5173"
+    Description: >
+      Origins allowed for CORS during local development. The Next.js dev
+      server runs on :3000; :5173 is kept for the legacy Vite app. When P4
+      ships a public frontend URL, append it here (comma-separated).
+  DynamoTableName:
+    Type: String
+    Default: ""
+    Description: >
+      Optional DynamoDB table name for dedup lookups. Leave blank until P3
+      creates the table; the Lambda treats every file as new in that case.
+
+Conditions:
+  HasDynamoTable: !Not [!Equals [!Ref DynamoTableName, ""]]
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # S3 buckets - uploads, thumbnails, models
+  # ---------------------------------------------------------------------------
+
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-uploads-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [PUT, GET, HEAD]
+            AllowedOrigins: !Ref DevOrigin
+            ExposedHeaders: [ETag]
+            MaxAge: 3000
+      # Emit S3 object-level events to EventBridge so the ingest pipeline
+      # (P2 tagger/thumbnailer) can subscribe via EventBridge rules. Was
+      # enabled out-of-band via the CLI; declared here to bring it under
+      # IaC and remove stack drift.
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub "${UploadsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ThumbnailsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-thumbnails-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, HEAD]
+            AllowedOrigins: !Ref DevOrigin
+            MaxAge: 3000
+
+  ThumbnailsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ThumbnailsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ThumbnailsBucket.Arn
+              - !Sub "${ThumbnailsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ModelsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-models-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ModelsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ModelsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ModelsBucket.Arn
+              - !Sub "${ModelsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  # ---------------------------------------------------------------------------
+  # /uploads/presign Lambda - IAM role
+  # ---------------------------------------------------------------------------
+
+  UploadsCheckRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-uploads-check-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PresignUploads
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${UploadsBucket.Arn}/*"
+        - !If
+          - HasDynamoTable
+          - PolicyName: DedupAndSeedRecord
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                # GetItem for the dedup check; PutItem to seed the metadata
+                # record (owner/filename/mime/size) so it's populated before
+                # the tagger runs. The seed PutItem is condition-guarded
+                # (attribute_not_exists) so it never overwrites tagger output.
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:Query
+                  Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}"
+          - !Ref AWS::NoValue
+
+  # ---------------------------------------------------------------------------
+  # /uploads/presign Lambda - function
+  # ---------------------------------------------------------------------------
+
+  UploadsCheckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-uploads-check"
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt UploadsCheckRole.Arn
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          UPLOADS_BUCKET: !Ref UploadsBucket
+          DDB_TABLE: !Ref DynamoTableName
+          MAX_BYTES: "104857600"
+          PRESIGN_TTL_SECONDS: "300"
+      Code:
+        ZipFile: |
+          import base64
+          import json
+          import os
+          from datetime import datetime, timezone
+
+          import boto3
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+
+          BUCKET = os.environ["UPLOADS_BUCKET"]
+          TABLE = os.environ.get("DDB_TABLE") or None
+          MAX_BYTES = int(os.environ.get("MAX_BYTES", "104857600"))
+          PRESIGN_TTL = int(os.environ.get("PRESIGN_TTL_SECONDS", "300"))
+
+          MIME_TO_EXT = {
+              "image/jpeg": "jpg",
+              "image/png": "png",
+              "image/webp": "webp",
+              "video/mp4": "mp4",
+              "video/quicktime": "mov",
+          }
+
+          s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
+          ddb = boto3.client("dynamodb") if TABLE else None
+
+
+          def _response(status, body):
+              return {
+                  "statusCode": status,
+                  "headers": {
+                      "Content-Type": "application/json",
+                      "Access-Control-Allow-Origin": "*",
+                  },
+                  "body": json.dumps(body),
+              }
+
+
+          def _error(status, code, message):
+              return _response(status, {"error": {"code": code, "message": message}})
+
+
+          def _user_sub(event):
+              try:
+                  return event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+              except (KeyError, TypeError):
+                  return None
+
+
+          def _parse_body(event):
+              raw = event.get("body") or ""
+              if event.get("isBase64Encoded"):
+                  raw = base64.b64decode(raw).decode("utf-8")
+              return json.loads(raw) if raw else {}
+
+
+          def _tags_to_map(attr):
+              out = {}
+              for name, val in (attr or {}).get("M", {}).items():
+                  if "N" in val:
+                      out[name] = int(val["N"])
+              return out
+
+
+          def handler(event, _context):
+              sub = _user_sub(event)
+              if not sub:
+                  return _error(401, "UNAUTHORIZED", "no user identity")
+
+              try:
+                  body = _parse_body(event)
+              except (ValueError, TypeError):
+                  return _error(400, "BAD_REQUEST", "body must be valid JSON")
+
+              sha = str(body.get("sha256") or "").lower()
+              filename = str(body.get("filename") or "")
+              mime = str(body.get("mime_type") or "")
+              size = body.get("size_bytes")
+
+              if len(sha) != 64 or not all(c in "0123456789abcdef" for c in sha):
+                  return _error(400, "BAD_REQUEST", "sha256 must be a 64-char hex string")
+              if mime not in MIME_TO_EXT:
+                  return _error(400, "BAD_REQUEST",
+                                "unsupported mime_type; allowed: " + ", ".join(MIME_TO_EXT))
+              if not isinstance(size, int) or isinstance(size, bool) or size <= 0 or size > MAX_BYTES:
+                  return _error(400, "BAD_REQUEST",
+                                "size_bytes must be an integer in 1.." + str(MAX_BYTES))
+
+              ext = MIME_TO_EXT[mime]
+              key = f"{sub}/{sha}.{ext}"
+              # s3:// URI form matches what the tagger writes + the replicator
+              # mirrors to Cosmos (the team's live convention).
+              s3_url = f"s3://{BUCKET}/{key}"
+              file_type = "video" if mime.startswith("video/") else "image"
+
+              # Dedup: a record already exists for this content -> don't re-upload/re-tag.
+              if ddb:
+                  try:
+                      got = ddb.get_item(
+                          TableName=TABLE,
+                          Key={"pk": {"S": f"FILE#{sha}"}, "sk": {"S": "METADATA"}},
+                      )
+                      if "Item" in got:
+                          item = got["Item"]
+                          return _response(200, {
+                              "duplicate": True,
+                              "file_id": sha,
+                              "existing_url": item.get("s3_url", {}).get("S"),
+                              "tags": _tags_to_map(item.get("tags")),
+                          })
+                  except Exception as e:  # noqa: BLE001 - dedup is best-effort
+                      print(f"dedup check failed (proceeding as new): {e!r}")
+
+              url = s3.generate_presigned_url(
+                  ClientMethod="put_object",
+                  Params={"Bucket": BUCKET, "Key": key, "ContentType": mime},
+                  ExpiresIn=PRESIGN_TTL,
+                  HttpMethod="PUT",
+              )
+
+              # Seed the metadata record so owner/filename/mime/size are populated before
+              # the tagger runs. Field names match the LIVE table + the query API
+              # (verified 2026-06-01): owner is `user_id` = Cognito sub; the sha is
+              # `checksum`; `user_id`+`uploaded_at` populate the existing
+              # `user_id-index` GSI automatically. ConditionExpression keeps it
+              # idempotent and guarantees we never overwrite an existing record --
+              # the tagger uses update_item to merge its own fields (tags,
+              # thumbnail_url, file_type), so the two writes never clobber each other.
+              if ddb:
+                  now = datetime.now(timezone.utc).isoformat()
+                  try:
+                      ddb.put_item(
+                          TableName=TABLE,
+                          Item={
+                              "pk": {"S": f"FILE#{sha}"},
+                              "sk": {"S": "METADATA"},
+                              "checksum": {"S": sha},
+                              "user_id": {"S": sub},
+                              "file_type": {"S": file_type},
+                              "mime_type": {"S": mime},
+                              "original_filename": {"S": filename or f"{sha}.{ext}"},
+                              "s3_key": {"S": key},
+                              "s3_url": {"S": s3_url},
+                              "size_bytes": {"N": str(size)},
+                              "status": {"S": "pending"},
+                              "uploaded_at": {"S": now},
+                          },
+                          ConditionExpression="attribute_not_exists(pk)",
+                      )
+                  except ClientError as e:
+                      if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                          print(f"seed write failed (proceeding): {e!r}")
+                      # else: record already exists (race / tagger first) -> leave it.
+
+              return _response(200, {
+                  "duplicate": False,
+                  "upload_url": url,
+                  "file_id": sha,
+                  "expires_in": PRESIGN_TTL,
+              })
+
+  # ---------------------------------------------------------------------------
+  # API Gateway HTTP API + Cognito (JWT) authorizer
+  # ---------------------------------------------------------------------------
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${AppName}-api"
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: !Ref DevOrigin
+        AllowMethods: [GET, POST, DELETE, OPTIONS]
+        AllowHeaders: [content-type, authorization]
+        ExposeHeaders: [etag]
+        MaxAge: 600
+
+  CognitoAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      Name: cognito
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      IdentitySource:
+        - $request.header.Authorization
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClientId
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
+
+  UploadsCheckIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt UploadsCheckFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: "2.0"
+
+  UploadsCheckRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /uploads/presign"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub "integrations/${UploadsCheckIntegration}"
+
+  UploadsCheckLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UploadsCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/uploads/presign"
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+
+Outputs:
+  UploadsBucketName:
+    Value: !Ref UploadsBucket
+    Description: VITE_S3_UPLOADS_BUCKET
+  ThumbnailsBucketName:
+    Value: !Ref ThumbnailsBucket
+    Description: Thumbnails bucket for ML pipeline output
+  ModelsBucketName:
+    Value: !Ref ModelsBucket
+    Description: Models bucket for ML pipeline input
+  ApiBaseUrl:
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Description: VITE_API_BASE_URL
+  UploadsCheckRoleArn:
+    Value: !GetAtt UploadsCheckRole.Arn
+    Description: IAM role ARN for the /uploads/presign Lambda
