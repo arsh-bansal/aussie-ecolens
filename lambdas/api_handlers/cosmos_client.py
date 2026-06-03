@@ -2,8 +2,8 @@
 Cosmos DB client — thin wrapper around azure-cosmos SDK.
 
 All queries use the /user_id partition key so they stay single-partition
-(fast, low RU).  The one cross-partition query (find by thumbnail_url)
-is explicitly flagged.
+(fast, low RU). The one cross-partition query (find by thumbnail_url) is
+explicitly flagged.
 
 Environment variables (set via Lambda env or .env for local dev):
     COSMOS_ENDPOINT    – documentEndpoint from `az cosmosdb show`
@@ -13,9 +13,8 @@ Environment variables (set via Lambda env or .env for local dev):
 """
 
 import os
-from typing import Any
 
-from azure.cosmos import CosmosClient, PartitionKey, exceptions
+from azure.cosmos import CosmosClient, exceptions
 
 
 _client: CosmosClient | None = None
@@ -36,6 +35,17 @@ def _get_container():
     db         = _client.get_database_client(db_name)
     _container = db.get_container_client(ctr_name)
     return _container
+
+
+def _safe_species(name: str) -> str:
+    """Escape a species name for safe interpolation into a Cosmos property path.
+
+    Cosmos SQL cannot parameterize a property *path* (only values), so the
+    species key is interpolated. We escape backslashes and double-quotes so a
+    name containing those characters can't break out of the c.tags["..."]
+    accessor or alter the query. Counts are always passed as real parameters.
+    """
+    return name.replace("\\", "\\\\").replace('"', '\\"')
 
 
 # ---------------------------------------------------------------------------
@@ -62,25 +72,28 @@ def query_user_files(
     tag_filters:      {"koala": 3, "wombat": 1}  → AND of c.tags.X >= N
     species_presence: ["dingo"]                   → IS_DEFINED(c.tags.dingo)
 
-    Both can be combined; results satisfy ALL conditions (AND).
+    Both can be combined; results satisfy ALL conditions (logical AND).
     """
     ctr = _get_container()
 
     params: list[dict] = [{"name": "@uid", "value": user_id}]
     where_clauses = ["c.user_id = @uid"]
 
-    # Count-based filters
+    # Count-based filters: c.tags["X"] >= N  (minimum counts, ANDed together)
     if tag_filters:
         for i, (species, count) in enumerate(tag_filters.items()):
             param_name = f"@count_{i}"
-            # Cosmos SQL accesses map keys via dot notation
-            where_clauses.append(f"c.tags[\"{species}\"] >= {param_name}")
+            where_clauses.append(
+                f'c.tags["{_safe_species(species)}"] >= {param_name}'
+            )
             params.append({"name": param_name, "value": count})
 
     # Presence-only filters (>=1, any count)
     if species_presence:
         for species in species_presence:
-            where_clauses.append(f"IS_DEFINED(c.tags[\"{species}\"])")
+            where_clauses.append(
+                f'IS_DEFINED(c.tags["{_safe_species(species)}"])'
+            )
 
     query = "SELECT * FROM c WHERE " + " AND ".join(where_clauses)
     return list(ctr.query_items(query=query, parameters=params,
@@ -90,8 +103,8 @@ def query_user_files(
 def get_file_by_thumbnail_url(thumbnail_url: str) -> dict | None:
     """
     Find a document by thumbnail_url.
-    This is a cross-partition query (thumbnail_url is not the partition key),
-    but it's a rare operation (flagged as such in the data model).
+    Cross-partition query (thumbnail_url is not the partition key), but it's a
+    rare operation (flagged as such in the data model). Value is parameterized.
     """
     ctr = _get_container()
     query = "SELECT * FROM c WHERE c.thumbnail_url = @thumb"
@@ -132,3 +145,4 @@ def delete_file_record(sha: str, user_id: str) -> bool:
 def list_user_files(user_id: str) -> list[dict]:
     """Return all documents for a user (used by bulk-delete)."""
     return query_user_files(user_id)
+    

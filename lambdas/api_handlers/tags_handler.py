@@ -1,12 +1,17 @@
 """
-POST /tags/modify — renamed from POST /tags
+POST /tags/modify — bulk add/remove tags (2.3.1)
 Body: {"urls": [...], "tags": [...], "operation": 0|1}
 Response: {"updated": <count>, "failed": [<urls>]}
+
+CQRS: reads the current tag map from Cosmos (read model), computes the new map,
+then WRITES to DynamoDB (system of record). The Replicator mirrors the change
+back to Cosmos via the stream. Writes never touch Cosmos directly.
 """
 
 from flask import Blueprint, request, jsonify
 from auth import require_auth
-from cosmos_client import get_file_by_sha, update_file_tags
+from cosmos_client import get_file_by_sha          # read current tags (read model)
+from dynamodb_client import update_file_tags        # write (system of record)
 
 tags_bp = Blueprint("tags", __name__)
 
@@ -50,6 +55,7 @@ def bulk_tag():
             continue
 
         try:
+            # Read current tags from the read model (Cosmos).
             doc = get_file_by_sha(sha, user_id)
             if doc is None:
                 failed.append(url)
@@ -57,17 +63,21 @@ def bulk_tag():
 
             current_tags: dict = dict(doc.get("tags", {}))
 
-            if operation == 1:
+            if operation == 1:  # add
                 for tag in tags:
                     current_tags[tag] = current_tags.get(tag, 0) + 1
-            else:
+            else:               # remove — ignores tags that aren't assigned
                 for tag in tags:
                     current_tags.pop(tag, None)
 
-            update_file_tags(sha, user_id, current_tags)
-            updated.append(url)
+            # Write to the system of record (DynamoDB). Replicator -> Cosmos.
+            if update_file_tags(sha, user_id, current_tags):
+                updated.append(url)
+            else:
+                failed.append(url)
 
         except Exception:
             failed.append(url)
 
     return jsonify({"updated": len(updated), "failed": failed}), 200
+    

@@ -1,13 +1,16 @@
 """
 lambda_handler.py — AWS Lambda entry point for the Query API.
 
-Uses aws-wsgi to wrap the Flask app for Lambda + API Gateway (HTTP API or
-REST API with Lambda proxy integration).
+Wraps the Flask (WSGI) app for Lambda behind API Gateway using apig-wsgi, which
+natively understands the API Gateway HTTP API v2.0 payload format (as well as
+REST/HTTP v1.0). binary_support=True base64-decodes binary request bodies — the
+multipart image upload for POST /search/by-file — and base64-encodes binary
+responses, transparently.
 
-Deploy via SAM or CloudFormation, pointing Handler at:
+Deploy via SAM, pointing Handler at:
     lambda_handler.handler
 
-Environment variables (set in SAM template / Lambda console):
+Environment variables (set in the SAM template / Lambda console):
     COSMOS_ENDPOINT          – Azure Cosmos documentEndpoint
     COSMOS_KEY               – Azure Cosmos primaryMasterKey
     COSMOS_DATABASE          – default: aussie-ecolens
@@ -16,13 +19,12 @@ Environment variables (set in SAM template / Lambda console):
     COGNITO_CLIENT_ID        – Cognito app client ID
     AWS_REGION               – default: ap-southeast-2
     S3_BUCKET_NAME           – uploads bucket name
-    MODEL_PT_PATH            – path to model.pt (in Lambda deployment package)
-    MD_MODEL_PATH            – path to mdv5a.pt (in Lambda deployment package)
+    DYNAMODB_TABLE           – system-of-record table (tag edit / delete writes)
+    TAGGER_LAMBDA_NAME       – Arsh's image tag-only Lambda (for /search/by-file)
 """
 
-import awsgi
+from apig_wsgi import make_lambda_handler
 from app import app
 
-
-def handler(event, context):
-    return awsgi.response(app, event, context, base64_content_types={"image/jpeg", "image/png"})
+# Returns a handler(event, context) that speaks API Gateway v1 AND v2.
+handler = make_lambda_handler(app, binary_support=True)
