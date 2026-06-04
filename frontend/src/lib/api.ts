@@ -17,10 +17,11 @@ import type {
 
 // Two backend APIs:
 //   AWS_BASE   (NEXT_PUBLIC_AWS_API_BASE)   -> the upload/auth API (P1/Adam):
-//                                              /uploads/presign, /tags/subscribe
+//                                              /uploads/presign only.
 //   QUERY_BASE (NEXT_PUBLIC_AZURE_API_BASE) -> the query API (P3/Rachana), which
 //                                              serves ALL reads (search/*) AND the
-//                                              tag-edit + delete mutations.
+//                                              tag-edit + delete + subscribe
+//                                              mutations (/tags/subscribe).
 // Note: the query API is deployed on AWS API Gateway (Flask), not Azure
 // Functions, so the NEXT_PUBLIC_AZURE_API_BASE name is historical. It points at
 // the AWS query-API base URL (…execute-api.ap-southeast-2.amazonaws.com, $default
@@ -73,15 +74,16 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  // ── Query API (search + tag-edit + delete + subscribe) ────────────────────
+  // tag-edit, delete, and subscribe are served by the query API (same place as
+  // search), not the upload/auth API — so they route through queryApi(), not
+  // aws(). subscribe lives on the query API (/tags/subscribe), so it must use
+  // QUERY_BASE; otherwise pointing AWS_BASE at Adam's upload API would 404 it.
   subscribe: (body: SubscribeRequest) =>
-    aws<SubscribeResponse>("/tags/subscribe", {
+    queryApi<SubscribeResponse>("/tags/subscribe", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-
-  // ── Query API (search + tag-edit + delete) ────────────────────────────────
-  // tag-edit and delete are served by the query API (same place as search),
-  // not the upload/auth API — so they route through queryApi(), not aws().
   modifyTags: (body: TagModifyRequest) =>
     queryApi<TagModifyResponse>("/tags/modify", {
       method: "POST",

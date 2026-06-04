@@ -86,8 +86,11 @@ def require_auth(f):
         except jwt.InvalidTokenError as e:
             return jsonify({"error": f"Invalid token: {e}"}), 401
 
-        # Inject user_id (Cognito sub) onto request for downstream use
+        # Inject user_id (Cognito sub) onto request for downstream use.
+        # email is present on the ID token (the frontend sends the ID token);
+        # the subscribe endpoint needs it as the SNS email endpoint.
         request.user_id = claims["sub"]
+        request.user_email = claims.get("email")
         return f(*args, **kwargs)
 
     return decorated
