@@ -50,7 +50,7 @@ export default function DashboardPage() {
       <header className="topbar">
         <div>
           <div className="page-title">Field overview</div>
-          <div className="page-sub">{greeting}</div>
+          <div className="page-sub">Live detections across AWS &amp; Azure</div>
         </div>
         <div className="topbar-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" strokeLinecap="round"/></svg>
@@ -65,6 +65,34 @@ export default function DashboardPage() {
           New upload
         </Link>
       </header>
+
+      {/* Video hero banner */}
+      <div style={{ position: 'relative', height: '260px', overflow: 'hidden', flexShrink: 0 }}>
+        <video
+          autoPlay muted loop playsInline
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        >
+          <source src="/dashboard-bg.mp4" type="video/mp4" />
+        </video>
+        {/* Dark overlay so text is readable */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, oklch(0.08 0.02 50 / 0.55) 0%, oklch(0.06 0.02 50 / 0.75) 60%, oklch(0.088 0.010 42) 100%)' }} />
+        {/* Content over video */}
+        <div style={{ position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 34px 28px' }}>
+          <div style={{ fontSize: '11px', letterSpacing: '0.24em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: '10px' }}>
+            AI Wildlife Observatory · Live
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'clamp(26px, 3vw, 42px)', color: '#fff', lineHeight: 1.05, textShadow: '0 2px 20px oklch(0 0 0 / 0.5)' }}>
+            {greeting}
+          </div>
+          <p style={{ fontSize: '14px', color: 'oklch(0.9 0.01 80 / 0.8)', marginTop: '8px', maxWidth: '480px' }}>
+            Upload wildlife media and let the AI pipeline automatically detect Australian species across AWS and Azure.
+          </p>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+            <Link href="/upload" className="btn btn-primary btn-sm">New upload</Link>
+            <Link href="/search" className="btn btn-sm" style={{ background: 'oklch(1 0 0 / 0.12)', color: '#fff', border: '1px solid oklch(1 0 0 / 0.25)', backdropFilter: 'blur(6px)' }}>Search detections</Link>
+          </div>
+        </div>
+      </div>
 
       <div className="page">
         {/* Stats */}

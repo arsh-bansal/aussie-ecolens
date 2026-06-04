@@ -25,8 +25,8 @@ import type {
 // Functions, so the NEXT_PUBLIC_AZURE_API_BASE name is historical. It points at
 // the AWS query-API base URL (…execute-api.ap-southeast-2.amazonaws.com, $default
 // stage, no path suffix).
-const AWS_BASE = process.env.NEXT_PUBLIC_AWS_API_BASE ?? "";
-const QUERY_BASE = process.env.NEXT_PUBLIC_AZURE_API_BASE ?? "";
+const AWS_BASE = (process.env.NEXT_PUBLIC_AWS_API_BASE ?? '').replace(/\/$/, '');
+const QUERY_BASE = (process.env.NEXT_PUBLIC_AZURE_API_BASE ?? '').replace(/\/$/, '');
 
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await getIdToken();

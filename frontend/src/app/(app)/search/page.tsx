@@ -17,7 +17,7 @@ function ResultCard({ r }: { r: SearchResult }) {
       <div style={{ position: 'relative', height: '158px', overflow: 'hidden', background: 'var(--sand-200)' }}>
         {r.thumbnail_url
           // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={r.thumbnail_url} alt={species} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <img src={r.thumbnail_url} alt={species} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" strokeWidth="1.4"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 3-3 6 5"/></svg>
             </div>
@@ -53,12 +53,11 @@ export default function SearchPage() {
     setError(null);
     try {
       let res;
+      const terms = query.split(',').map(s => s.trim()).filter(Boolean);
       if (mode === 'species') {
-        res = await api.searchBySpecies({ species: query.split(',').map(s => s.trim()).filter(Boolean) });
+        res = await api.searchBySpecies({ species: terms });
       } else {
-        const tagMap = Object.fromEntries(
-          query.split(',').map(s => s.trim()).filter(Boolean).map(t => [t, 1])
-        );
+        const tagMap = Object.fromEntries(terms.map(t => [t, 1]));
         res = await api.searchByTags({ tags: tagMap });
       }
       setResults(res.results);
@@ -113,7 +112,7 @@ export default function SearchPage() {
                 <div className="topbar-search" style={{ flex: 1, minWidth: 0, margin: 0 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" strokeLinecap="round"/></svg>
                   <input
-                    placeholder={mode === 'species' ? 'e.g. cassowary, koala' : 'e.g. native, adult'}
+                    placeholder={mode === 'species' ? 'e.g. Domestic Dog, Koala (case-sensitive)' : 'e.g. native, adult'}
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                   />
