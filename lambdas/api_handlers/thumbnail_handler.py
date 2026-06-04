@@ -7,6 +7,7 @@ Response: {"url": "<full-size s3_url>"}
 from flask import Blueprint, request, jsonify
 from auth import require_auth
 from cosmos_client import get_file_by_thumbnail_url
+from s3_presign import presign_s3_uri
 
 thumbnail_bp = Blueprint("thumbnail", __name__)
 
@@ -28,4 +29,4 @@ def get_thumbnail():
     if doc is None:
         return jsonify({"error": "Thumbnail not found"}), 404
 
-    return jsonify({"url": doc.get("s3_url")}), 200
+    return jsonify({"url": presign_s3_uri(doc.get("s3_url"))}), 200

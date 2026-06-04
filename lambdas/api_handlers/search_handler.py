@@ -8,16 +8,20 @@ POST /search/species  — presence only              {"species": ["Dingo"]}
 from flask import Blueprint, request, jsonify
 from auth import require_auth
 from cosmos_client import query_user_files
+from s3_presign import presign_s3_uri
 
 search_bp = Blueprint("search", __name__)
 
 
 def _format_result(doc: dict) -> dict:
+    # The DB stores canonical s3:// URIs for the file and its thumbnail. Browsers
+    # can't load s3:// and the buckets are private, so we hand back short-lived
+    # presigned https URLs instead — the image loads, the bucket stays private.
     return {
         "file_id":       doc.get("id"),
         "file_type":     doc.get("file_type"),
-        "url":           doc.get("s3_url"),
-        "thumbnail_url": doc.get("thumbnail_url"),
+        "url":           presign_s3_uri(doc.get("s3_url")),
+        "thumbnail_url": presign_s3_uri(doc.get("thumbnail_url")),
         "tags":          doc.get("tags", {}),
     }
 
