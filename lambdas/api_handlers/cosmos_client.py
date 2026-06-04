@@ -16,6 +16,8 @@ import os
 
 from azure.cosmos import CosmosClient, exceptions
 
+from species_catalog import resolve_species
+
 _client: CosmosClient | None = None
 _container = None
 
@@ -37,14 +39,21 @@ def _get_container():
 
 
 def _safe_species(name: str) -> str:
-    """Escape a species name for safe interpolation into a Cosmos property path.
+    """Resolve to the canonical tag key, then escape for Cosmos interpolation.
+
+    Stored tag keys are the Tagger's canonical common names (e.g. "Red Fox",
+    "Short-beaked Echidna"). User input is case-noisy and may use synonyms, so
+    we first resolve it to the exact canonical name via the species catalog;
+    unrecognised input is passed through unchanged so the query simply matches
+    nothing instead of erroring.
 
     Cosmos SQL cannot parameterize a property *path* (only values), so the
     species key is interpolated. We escape backslashes and double-quotes so a
     name containing those characters can't break out of the c.tags["..."]
     accessor or alter the query. Counts are always passed as real parameters.
     """
-    return name.strip().title().replace("\\", "\\\\").replace('"', '\\"')
+    canonical = resolve_species(name) or name.strip()
+    return canonical.replace("\\", "\\\\").replace('"', '\\"')
 
 
 # ---------------------------------------------------------------------------

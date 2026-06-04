@@ -7,6 +7,24 @@ import type { SearchResult } from '@/types';
 
 type SearchMode = 'species' | 'tags' | 'file';
 
+// Canonical species names recognised by the backend (mirrors the Tagger
+// taxonomy via species_catalog). Offered as autocomplete so searches use names
+// that can actually match stored tags. The API also resolves common synonyms.
+const SPECIES_OPTIONS = [
+  'Agile Antechinus', 'Australian Brushturkey', 'Australian Magpie',
+  'Bar-shouldered Dove', 'Black Rat', 'Bush Rat', 'Bush Stone-curlew',
+  'Cattle', 'Chowchilla', 'Common Brushtail Possum', 'Common Wombat', 'Dingo',
+  'Domestic Cat', 'Domestic Dog', 'Eastern Grey Kangaroo', 'Eastern Yellow Robin',
+  'European Hare', 'European Rabbit', 'Fallow Deer', 'Giant White-tailed Rat',
+  'Goat', 'Grey Shrikethrush', 'Grey-headed Robin', 'House Mouse', 'Human',
+  'Lace Monitor', 'Laughing Kookaburra', 'Long-nosed Bandicoot',
+  'Mountain Brushtail Possum', 'Musky Rat-kangaroo', 'Noisy Pitta',
+  'Northern Brown Bandicoot', 'Orange-footed Scrubfowl', 'Pacific Emerald Dove',
+  'Pied Currawong', 'Rat (genus)', 'Red Fox', 'Red-legged Pademelon',
+  'Red-necked Wallaby', 'Short-beaked Echidna', 'Southern Cassowary',
+  'Superb Lyrebird', 'Swamp Wallaby', 'White-winged Chough', 'Wild Pig',
+];
+
 function ResultCard({ r }: { r: SearchResult }) {
   const topTag = Object.entries(r.tags ?? {}).sort((a, b) => b[1] - a[1])[0];
   const species = topTag?.[0] ?? 'Unknown species';
@@ -113,10 +131,16 @@ export default function SearchPage() {
                 <div className="topbar-search" style={{ flex: 1, minWidth: 0, margin: 0 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" strokeLinecap="round"/></svg>
                   <input
-                    placeholder={mode === 'species' ? 'e.g. cassowary, koala' : 'e.g. native, adult'}
+                    placeholder={mode === 'species' ? 'e.g. Red Fox, Southern Cassowary' : 'e.g. Cattle, Dingo'}
                     value={query}
                     onChange={e => setQuery(e.target.value)}
+                    list={mode === 'species' ? 'species-options' : undefined}
                   />
+                  {mode === 'species' && (
+                    <datalist id="species-options">
+                      {SPECIES_OPTIONS.map(s => <option key={s} value={s} />)}
+                    </datalist>
+                  )}
                 </div>
                 <button className="btn btn-primary" type="submit" disabled={loading || !query.trim()}>
                   {loading ? 'Searching…' : 'Search'}

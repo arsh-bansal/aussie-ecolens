@@ -2,15 +2,22 @@
 POST /tags/subscribe — subscribe the authenticated user's email to alerts for
 one species tag (assignment 2.3.3).
 
-Body:     {"tag": "koala"}
-Response: {"status": "pending_confirmation" | "subscribed", "tag": "koala", "email": "..."}
+Body:     {"tag": "fox"}   # free-form; resolved to the canonical "Red Fox"
+Response: {"status": "pending_confirmation" | "subscribed", "tag": "Red Fox", "email": "..."}
+
+The incoming tag is resolved to the canonical species name (species_catalog)
+before use. This matters because the Notifier publishes that exact canonical
+name as the SNS "species" MessageAttribute, and SNS filter policies match
+attributes by case-sensitive exact string — a filter on "fox" would never match
+a published "Red Fox". Unknown species are rejected with 400.
 
 Mechanism: the Notifier Lambda publishes every detection to the SNS topic with a
 "species" MessageAttribute. SNS subscription *filter policies* match on that
 attribute. SNS allows an email endpoint only ONE subscription per topic, so we
 keep ONE subscription per user and grow its filter policy's species list — e.g.
-{"species": ["koala", "cassowary"]} — rather than creating a subscription per
-tag (which fails with "Subscription already exists with different attributes").
+{"species": ["Red Fox", "Southern Cassowary"]} — rather than creating a
+subscription per tag (which fails with "Subscription already exists with
+different attributes").
 
 Confirmation: a new email subscription is inactive until the user clicks the
 one-time "Confirm subscription" link AWS emails them. Until confirmed it has no
@@ -26,6 +33,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from flask import Blueprint, request, jsonify
 
 from auth import require_auth
+from species_catalog import CANONICAL_SPECIES, resolve_species
 
 subscribe_bp = Blueprint("subscribe", __name__)
 
@@ -94,9 +102,21 @@ def subscribe():
         return jsonify({"error": "Alerts are not configured (no SNS topic)"}), 500
 
     body = request.get_json(silent=True) or {}
-    tag = (body.get("tag") or "").strip().lower()
-    if not tag:
+    raw_tag = (body.get("tag") or "").strip()
+    if not raw_tag:
         return jsonify({"error": "Provide 'tag' in JSON body"}), 400
+
+    # Resolve to the exact canonical species name. SNS filter policies match
+    # message attributes by case-sensitive exact string, and the Notifier
+    # publishes the canonical name the Tagger stored, so the filter value MUST
+    # be that canonical name — not the user's casing or a synonym. Reject
+    # unknown species rather than create a subscription that can never fire.
+    tag = resolve_species(raw_tag)
+    if not tag:
+        return jsonify({
+            "error": f"Unknown species '{raw_tag}'. Use a recognised species name.",
+            "valid_species": list(CANONICAL_SPECIES),
+        }), 400
 
     email = getattr(request, "user_email", None)
     if not email:
