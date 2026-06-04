@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Aussie EcoLens — Query API (Rachana)
@@ -38,16 +38,16 @@ Globals:
     MemorySize: 512
     Environment:
       Variables:
-        COSMOS_ENDPOINT:       !Ref CosmosEndpoint
-        COSMOS_KEY:            !Ref CosmosKey
-        COSMOS_DATABASE:       !Ref CosmosDatabase
-        COSMOS_CONTAINER:      !Ref CosmosContainer
-        COGNITO_USER_POOL_ID:  !Ref CognitoUserPoolId
-        COGNITO_CLIENT_ID:     !Ref CognitoClientId
-        AWS_REGION_NAME:       !Ref AWS::Region
-        S3_BUCKET_NAME:        aussie-ecolens-uploads-247622885425
-        TAGGER_LAMBDA_NAME:    !Ref TaggerLambdaName
-        DYNAMODB_TABLE:        aussie-ecolens-files
+        COSMOS_ENDPOINT: !Ref CosmosEndpoint
+        COSMOS_KEY: !Ref CosmosKey
+        COSMOS_DATABASE: !Ref CosmosDatabase
+        COSMOS_CONTAINER: !Ref CosmosContainer
+        COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+        COGNITO_CLIENT_ID: !Ref CognitoClientId
+        AWS_REGION_NAME: !Ref AWS::Region
+        S3_BUCKET_NAME: aussie-ecolens-uploads-247622885425
+        TAGGER_LAMBDA_NAME: !Ref TaggerLambdaName
+        DYNAMODB_TABLE: aussie-ecolens-files
 
 Resources:
   QueryApi:
@@ -101,6 +101,19 @@ Resources:
             ApiId: !Ref QueryApi
             Path: /{proxy+}
             Method: ANY
+        # CORS preflight: browsers send an unauthenticated OPTIONS before any
+        # cross-origin POST with an Authorization header. This explicit OPTIONS
+        # route has NO authorizer, so preflight returns 200 (handled by Flask /
+        # gateway CORS) instead of 401. It's more specific than ANY for OPTIONS,
+        # so it wins; GET/POST/DELETE still go through the authorized ANY route.
+        Preflight:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref QueryApi
+            Path: /{proxy+}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
 Outputs:
   QueryApiUrl:
