@@ -109,6 +109,14 @@ Resources:
                 - sns:Subscribe
                 - sns:ListSubscriptionsByTopic
               Resource: !Ref SnsTopicArn
+            # Get/SetSubscriptionAttributes act on the subscription ARN, which
+            # SNS does not support scoping by topic, so these need Resource "*".
+            # Used to widen a user's existing filter policy when they add a tag.
+            - Effect: Allow
+              Action:
+                - sns:GetSubscriptionAttributes
+                - sns:SetSubscriptionAttributes
+              Resource: "*"
       Events:
         # Single catch-all: every path + method forwards to Flask, which owns
         # the real routing (/search/tags, /search/species, /search/by-thumbnail,

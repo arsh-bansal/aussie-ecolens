@@ -7,14 +7,15 @@ Response: {"status": "pending_confirmation" | "subscribed", "tag": "koala", "ema
 
 Mechanism: the Notifier Lambda publishes every detection to the SNS topic with a
 "species" MessageAttribute. SNS subscription *filter policies* match on that
-attribute, so we create one email subscription per (user, tag) with a filter
-policy of {"species": [tag]} — the user then only receives emails for tags they
-asked for; SNS does the routing.
+attribute. SNS allows an email endpoint only ONE subscription per topic, so we
+keep ONE subscription per user and grow its filter policy's species list — e.g.
+{"species": ["koala", "cassowary"]} — rather than creating a subscription per
+tag (which fails with "Subscription already exists with different attributes").
 
-Confirmation: SNS email subscriptions are not active until the user clicks the
-one-time "Confirm subscription" link AWS emails them. Until then the
-subscription is PendingConfirmation and no alerts are delivered — hence the
-"pending_confirmation" status returned on first subscribe.
+Confirmation: a new email subscription is inactive until the user clicks the
+one-time "Confirm subscription" link AWS emails them. Until confirmed it has no
+real ARN, so its filter policy can't be edited yet — additional tags can be
+added only after confirmation.
 """
 
 import os
@@ -34,6 +35,57 @@ _SPECIES_ATTRIBUTE = os.environ.get("SPECIES_ATTRIBUTE", "species")
 
 _sns = boto3.client("sns", region_name=_REGION)
 
+_PENDING = "PendingConfirmation"
+_DELETED = "Deleted"
+
+
+def _find_email_subscription(email: str) -> tuple[str | None, bool]:
+    """Locate this email's subscription on the topic.
+
+    Returns (subscription_arn, pending):
+      - (arn, False)  a confirmed subscription with an editable ARN
+      - (None, True)  an unconfirmed subscription exists (no editable ARN yet)
+      - (None, False) no subscription exists
+    """
+    pending = False
+    token: str | None = None
+    while True:
+        kwargs: dict = {"TopicArn": _TOPIC_ARN}
+        if token:
+            kwargs["NextToken"] = token
+        resp = _sns.list_subscriptions_by_topic(**kwargs)
+        for sub in resp.get("Subscriptions", []):
+            if sub.get("Protocol") != "email" or sub.get("Endpoint") != email:
+                continue
+            arn = sub.get("SubscriptionArn", "")
+            if arn and arn not in (_PENDING, _DELETED):
+                return arn, False
+            if arn == _PENDING:
+                pending = True
+        token = resp.get("NextToken")
+        if not token:
+            return None, pending
+
+
+def _add_tag_to_filter(arn: str, tag: str) -> None:
+    """Merge `tag` into the species list of an existing subscription's policy."""
+    attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
+    policy_raw = attrs.get("FilterPolicy")
+    policy = json.loads(policy_raw) if policy_raw else {}
+
+    species = policy.get(_SPECIES_ATTRIBUTE, [])
+    if not isinstance(species, list):
+        species = [species]
+    if tag not in species:
+        species.append(tag)
+
+    policy[_SPECIES_ATTRIBUTE] = species
+    _sns.set_subscription_attributes(
+        SubscriptionArn=arn,
+        AttributeName="FilterPolicy",
+        AttributeValue=json.dumps(policy),
+    )
+
 
 @subscribe_bp.route("/tags/subscribe", methods=["POST"])
 @require_auth
@@ -50,31 +102,33 @@ def subscribe():
     if not email:
         return jsonify({"error": "No email on your account; cannot create an alert"}), 400
 
-    # Match the exact attribute the Notifier publishes on.
-    filter_policy = {_SPECIES_ATTRIBUTE: [tag]}
-
     try:
-        # Deliberately NOT passing ReturnSubscriptionArn=True: with it, SNS
-        # returns a real-looking ARN even while the email is unconfirmed, which
-        # would let us falsely report "subscribed". Without it, a fresh email
-        # subscription returns the literal "pending confirmation" until the
-        # user clicks the AWS confirmation link, so the status we report is
-        # truthful. An already-confirmed endpoint returns its real ARN.
-        resp = _sns.subscribe(
+        arn, pending = _find_email_subscription(email)
+
+        # Already subscribed (confirmed): just widen the filter policy.
+        if arn:
+            _add_tag_to_filter(arn, tag)
+            return jsonify({"status": "subscribed", "tag": tag, "email": email}), 200
+
+        # Unconfirmed subscription exists: a second Subscribe with different
+        # attributes would be rejected by SNS, so ask the user to confirm first.
+        if pending:
+            return jsonify({
+                "status": "pending_confirmation",
+                "tag": tag,
+                "email": email,
+                "message": "Confirm the subscription email we already sent, "
+                           "then add more species.",
+            }), 200
+
+        # No subscription yet: create one seeded with this tag.
+        _sns.subscribe(
             TopicArn=_TOPIC_ARN,
             Protocol="email",
             Endpoint=email,
-            Attributes={"FilterPolicy": json.dumps(filter_policy)},
+            Attributes={"FilterPolicy": json.dumps({_SPECIES_ATTRIBUTE: [tag]})},
         )
+        return jsonify({"status": "pending_confirmation", "tag": tag, "email": email}), 200
+
     except (ClientError, BotoCoreError) as e:
         return jsonify({"error": str(e)}), 500
-
-    # An unconfirmed email subscription has no real ARN yet.
-    arn = resp.get("SubscriptionArn", "")
-    confirmed = bool(arn) and arn.lower() != "pending confirmation"
-
-    return jsonify({
-        "status": "subscribed" if confirmed else "pending_confirmation",
-        "tag": tag,
-        "email": email,
-    }), 200
