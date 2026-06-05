@@ -70,35 +70,75 @@ def get_file_by_sha(sha: str, user_id: str) -> dict | None:
         return None
 
 
-def query_user_files(
-    user_id: str,
-    tag_filters: dict[str, int] | None = None,
-    species_presence: list[str] | None = None,
-) -> list[dict]:
+def _append_tag_clauses(
+    tag_filters: dict[str, int] | None,
+    species_presence: list[str] | None,
+    where_clauses: list[str],
+    params: list[dict],
+) -> None:
+    """Append tag/species WHERE clauses (shared by global + per-user queries).
+
+    tag_filters:      {"Koala": 3, "Common Wombat": 1} → AND of c.tags["X"] >= N
+    species_presence: ["Dingo"]                         → IS_DEFINED(c.tags["X"])
+
+    Species keys are resolved to canonical names and escaped via _safe_species.
+    Counts are bound as real parameters (only the property path is interpolated).
     """
-    Query files for a user, optionally filtered by tags.
-
-    tag_filters:      {"koala": 3, "wombat": 1}  → AND of c.tags.X >= N
-    species_presence: ["dingo"]                   → IS_DEFINED(c.tags.dingo)
-
-    Both can be combined; results satisfy ALL conditions (logical AND).
-    """
-    ctr = _get_container()
-
-    params: list[dict] = [{"name": "@uid", "value": user_id}]
-    where_clauses = ["c.user_id = @uid"]
-
-    # Count-based filters: c.tags["X"] >= N  (minimum counts, ANDed together)
     if tag_filters:
         for i, (species, count) in enumerate(tag_filters.items()):
             param_name = f"@count_{i}"
             where_clauses.append(f'c.tags["{_safe_species(species)}"] >= {param_name}')
             params.append({"name": param_name, "value": count})
 
-    # Presence-only filters (>=1, any count)
     if species_presence:
         for species in species_presence:
             where_clauses.append(f'IS_DEFINED(c.tags["{_safe_species(species)}"])')
+
+
+def query_files(
+    tag_filters: dict[str, int] | None = None,
+    species_presence: list[str] | None = None,
+) -> list[dict]:
+    """Global tag/species search across ALL users' files (shared observatory).
+
+    The platform is a shared library (assignment 4.3): tag/species queries return
+    every matching file in the database regardless of uploader, so this is a
+    cross-partition query. Data volume is small, so the RU cost is acceptable;
+    the tradeoff is documented here rather than assumed. Results satisfy ALL
+    conditions (logical AND). Read-only — owner-scoped mutations (delete, tag
+    edit) deliberately stay per-user via query_user_files.
+    """
+    ctr = _get_container()
+
+    params: list[dict] = []
+    where_clauses: list[str] = []
+    _append_tag_clauses(tag_filters, species_presence, where_clauses, params)
+
+    where = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    query = "SELECT * FROM c" + where
+    return list(
+        ctr.query_items(
+            query=query, parameters=params, enable_cross_partition_query=True
+        )
+    )
+
+
+def query_user_files(
+    user_id: str,
+    tag_filters: dict[str, int] | None = None,
+    species_presence: list[str] | None = None,
+) -> list[dict]:
+    """Single-partition query scoped to one user's files.
+
+    Used by owner-scoped operations (bulk delete / list) where least privilege
+    means a user only ever touches their own records. Tag/species *search* uses
+    the global query_files instead.
+    """
+    ctr = _get_container()
+
+    params: list[dict] = [{"name": "@uid", "value": user_id}]
+    where_clauses = ["c.user_id = @uid"]
+    _append_tag_clauses(tag_filters, species_presence, where_clauses, params)
 
     query = "SELECT * FROM c WHERE " + " AND ".join(where_clauses)
     return list(ctr.query_items(query=query, parameters=params, partition_key=user_id))

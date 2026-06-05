@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import Blueprint, request, jsonify
 from auth import require_auth
-from cosmos_client import query_user_files
+from cosmos_client import query_files
 from tagging import tag_image_file
 from s3_presign import presign_s3_uri
 
@@ -50,8 +50,6 @@ def query_file():
                      "Video query-by-file is not supported."
         }), 415
 
-    user_id = request.user_id
-
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp_path = tmp.name
         uploaded.save(tmp_path)
@@ -63,7 +61,7 @@ def query_file():
             return jsonify({"results": [], "detected_tags": {}}), 200
 
         species_list = list(detected_tags.keys())
-        docs = query_user_files(user_id=user_id, species_presence=species_list)
+        docs = query_files(species_presence=species_list)
 
         return jsonify({
             "results":       [_format_result(d) for d in docs],
