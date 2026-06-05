@@ -45,8 +45,22 @@ export default function LoginPage() {
           muted
           playsInline
           preload="auto"
+          onTimeUpdate={(e) => {
+            // Ease into the freeze: over the final RAMP seconds, slow the
+            // playback rate from 1x down toward ~0.15x so the hold isn't abrupt.
+            const v = e.currentTarget;
+            if (!v.duration) return;
+            const RAMP = 2.5;
+            const remaining = v.duration - v.currentTime;
+            if (remaining <= RAMP) {
+              const t = Math.max(0, remaining / RAMP); // 1 → 0 across the ramp
+              v.playbackRate = 0.15 + 0.85 * (t * t);  // ease-out, floor 0.15x
+            } else if (v.playbackRate !== 1) {
+              v.playbackRate = 1;
+            }
+          }}
           onEnded={(e) => {
-            // Hold on the final frame instead of looping back to the start.
+            // Settle on the final frame instead of looping back to the start.
             const v = e.currentTarget;
             v.currentTime = Math.max(0, v.duration - 0.05);
             v.pause();
