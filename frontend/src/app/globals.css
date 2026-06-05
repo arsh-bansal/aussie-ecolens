@@ -288,7 +288,16 @@ button { font-family: inherit; cursor: pointer; }
    ============================================================ */
 .auth { display: grid; grid-template-columns: 1.05fr 1fr; min-height: 100vh; background: #0a0608; position: relative; overflow: hidden; }
 
-.auth-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; animation: authVisualIn 1.2s cubic-bezier(.2,.8,.2,1) both; }
+/* Wrapper carries the focus zoom/blur so it composes with the video's own
+   entry animation (which locks transform via animation-fill-mode: both). */
+.auth-video-wrap { position: absolute; inset: 0; z-index: 0; overflow: hidden;
+  transform: scale(1); filter: blur(0); transition: transform 1.1s cubic-bezier(.2,.8,.2,1), filter 1.1s cubic-bezier(.2,.8,.2,1); }
+.auth--focused .auth-video-wrap { transform: scale(1.06); filter: blur(4px); }
+.auth-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: authVisualIn 1.2s cubic-bezier(.2,.8,.2,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .auth-video-wrap { transition: filter .4s ease; }
+  .auth--focused .auth-video-wrap { transform: none; filter: blur(4px); }
+}
 .auth-bg-veil { position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
     linear-gradient(90deg, oklch(0.06 0.02 50 / 0.32) 0%, oklch(0.06 0.02 50 / 0.22) 40%, oklch(0.07 0.02 50 / 0.62) 56%, oklch(0.06 0.02 50 / 0.86) 74%, oklch(0.06 0.02 50 / 0.92) 100%),

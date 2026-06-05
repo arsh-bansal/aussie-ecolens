@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formActive, setFormActive] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,10 +37,24 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="auth">
-      <video className="auth-video" autoPlay muted loop playsInline preload="auto">
-        <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
-      </video>
+    <main className={`auth${formActive ? ' auth--focused' : ''}`}>
+      <div className="auth-video-wrap">
+        <video
+          className="auth-video"
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          onEnded={(e) => {
+            // Hold on the final frame instead of looping back to the start.
+            const v = e.currentTarget;
+            v.currentTime = Math.max(0, v.duration - 0.05);
+            v.pause();
+          }}
+        >
+          <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
+        </video>
+      </div>
       <div className="auth-bg-veil" />
 
       {/* Left — visual */}
@@ -69,7 +84,16 @@ export default function LoginPage() {
 
       {/* Right — form */}
       <section className="auth-panel">
-        <form className="auth-form" onSubmit={onSubmit}>
+        <form
+          className="auth-form"
+          onSubmit={onSubmit}
+          onFocusCapture={() => setFormActive(true)}
+          onBlurCapture={(e) => {
+            // Only clear when focus leaves the form entirely, not when moving
+            // between fields within it.
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setFormActive(false);
+          }}
+        >
           <div className="auth-kicker">Welcome back</div>
           <h1>Sign in to the observatory</h1>
           <p className="lede">Pick up where you left off — your detections, alerts and review queue are waiting.</p>
