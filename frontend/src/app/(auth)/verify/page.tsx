@@ -29,9 +29,22 @@ export default function VerifyPage() {
     if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus();
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
+  // Pasting a code (e.g. "123456") into any box distributes the digits across
+  // the boxes from that box onward, then auto-submits if all six are filled.
+  const handlePaste = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const nums = e.clipboardData.getData('text').replace(/\D/g, '');
+    if (!nums) return;
     e.preventDefault();
-    const code = digits.join('');
+    const d = [...digits];
+    for (let k = 0; k < nums.length && i + k < 6; k++) d[i + k] = nums[k];
+    setDigits(d);
+    const lastFilled = Math.min(i + nums.length, 6) - 1;
+    refs.current[Math.min(lastFilled + 1, 5)]?.focus();
+    const code = d.join('');
+    if (code.length === 6) verifyCode(code);
+  };
+
+  const verifyCode = async (code: string) => {
     if (code.length < 6) { toast.error('Enter the full 6-digit code.'); return; }
     setLoading(true);
     try {
@@ -43,6 +56,11 @@ export default function VerifyPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    verifyCode(digits.join(''));
   };
 
   const handleResend = async () => {
@@ -102,6 +120,7 @@ export default function VerifyPage() {
                 value={d}
                 onChange={e => handleInput(i, e.target.value)}
                 onKeyDown={e => handleKey(i, e)}
+                onPaste={e => handlePaste(i, e)}
               />
             ))}
           </div>
