@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import AuthVideo from '@/components/auth/AuthVideo';
+import { useAuthFocus } from '@/components/auth/useAuthFocus';
 
 export default function VerifyPage() {
   const { verify, resendCode } = useAuth();
@@ -17,6 +19,7 @@ export default function VerifyPage() {
   const [loading, setLoading] = useState(false);
   const [resent, setResent] = useState(false);
   const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const { focused, formFocusProps } = useAuthFocus();
 
   const handleInput = (i: number, val: string) => {
     const d = [...digits];
@@ -74,10 +77,8 @@ export default function VerifyPage() {
   };
 
   return (
-    <main className="auth">
-      <video className="auth-video" autoPlay muted loop playsInline preload="auto">
-        <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
-      </video>
+    <main className={`auth${focused ? ' auth--focused' : ''}`}>
+      <AuthVideo />
       <div className="auth-bg-veil" />
 
       <section className="auth-visual">
@@ -100,7 +101,7 @@ export default function VerifyPage() {
       </section>
 
       <section className="auth-panel">
-        <form className="auth-form" onSubmit={onSubmit}>
+        <form className="auth-form" onSubmit={onSubmit} {...formFocusProps}>
           <div className="auth-icon-badge">
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
           </div>

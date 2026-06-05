@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import AuthVideo from '@/components/auth/AuthVideo';
+import { useAuthFocus } from '@/components/auth/useAuthFocus';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -13,7 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [formActive, setFormActive] = useState(false);
+  const { focused, formFocusProps } = useAuthFocus();
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,38 +39,8 @@ export default function LoginPage() {
   };
 
   return (
-    <main className={`auth${formActive ? ' auth--focused' : ''}`}>
-      <div className="auth-video-wrap">
-        <video
-          className="auth-video"
-          autoPlay
-          muted
-          playsInline
-          preload="auto"
-          onTimeUpdate={(e) => {
-            // Ease into the freeze: over the final RAMP seconds, slow the
-            // playback rate from 1x down toward ~0.15x so the hold isn't abrupt.
-            const v = e.currentTarget;
-            if (!v.duration) return;
-            const RAMP = 2.5;
-            const remaining = v.duration - v.currentTime;
-            if (remaining <= RAMP) {
-              const t = Math.max(0, remaining / RAMP); // 1 → 0 across the ramp
-              v.playbackRate = 0.15 + 0.85 * (t * t);  // ease-out, floor 0.15x
-            } else if (v.playbackRate !== 1) {
-              v.playbackRate = 1;
-            }
-          }}
-          onEnded={(e) => {
-            // Settle on the final frame instead of looping back to the start.
-            const v = e.currentTarget;
-            v.currentTime = Math.max(0, v.duration - 0.05);
-            v.pause();
-          }}
-        >
-          <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
-        </video>
-      </div>
+    <main className={`auth${focused ? ' auth--focused' : ''}`}>
+      <AuthVideo />
       <div className="auth-bg-veil" />
 
       {/* Left — visual */}
@@ -98,16 +70,7 @@ export default function LoginPage() {
 
       {/* Right — form */}
       <section className="auth-panel">
-        <form
-          className="auth-form"
-          onSubmit={onSubmit}
-          onFocusCapture={() => setFormActive(true)}
-          onBlurCapture={(e) => {
-            // Only clear when focus leaves the form entirely, not when moving
-            // between fields within it.
-            if (!e.currentTarget.contains(e.relatedTarget as Node)) setFormActive(false);
-          }}
-        >
+        <form className="auth-form" onSubmit={onSubmit} {...formFocusProps}>
           <div className="auth-kicker">Welcome back</div>
           <h1>Sign in to the observatory</h1>
           <p className="lede">Pick up where you left off — your detections, alerts and review queue are waiting.</p>

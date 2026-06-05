@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import AuthVideo from '@/components/auth/AuthVideo';
+import { useAuthFocus } from '@/components/auth/useAuthFocus';
 
 export default function SignupPage() {
   const { register } = useAuth();
@@ -12,6 +14,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const { focused, formFocusProps } = useAuthFocus();
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -31,10 +34,8 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="auth">
-      <video className="auth-video" autoPlay muted loop playsInline preload="auto">
-        <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
-      </video>
+    <main className={`auth${focused ? ' auth--focused' : ''}`}>
+      <AuthVideo />
       <div className="auth-bg-veil" />
 
       <section className="auth-visual">
@@ -61,7 +62,7 @@ export default function SignupPage() {
       </section>
 
       <section className="auth-panel">
-        <form className="auth-form" onSubmit={onSubmit}>
+        <form className="auth-form" onSubmit={onSubmit} {...formFocusProps}>
           <div className="auth-kicker">Create account</div>
           <h1>Request field access</h1>
           <p className="lede">Set up your observer profile. We&apos;ll send a verification code to confirm your email.</p>
