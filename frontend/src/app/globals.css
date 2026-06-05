@@ -155,7 +155,9 @@ button { font-family: inherit; cursor: pointer; }
   position: sticky; top: 0; height: 100vh;
   padding: 22px 16px; border-right: 1px solid var(--bark-line);
 }
-.sb-brand { display: flex; align-items: center; gap: 11px; padding: 6px 8px 22px; }
+.sb-brand { display: flex; align-items: center; gap: 11px; padding: 6px 8px 22px; text-decoration: none; color: inherit; border-radius: 10px; transition: opacity .15s ease; }
+.sb-brand:hover { opacity: 0.82; }
+.sb-brand:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
 .sb-mark {
   width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
   background: linear-gradient(150deg, var(--ochre) 0%, var(--ochre-deep) 100%);

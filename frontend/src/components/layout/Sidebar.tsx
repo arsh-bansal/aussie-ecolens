@@ -45,7 +45,7 @@ export default function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sb-brand">
+      <Link href="/dashboard" className="sb-brand" aria-label="Aussie EcoLens — go to dashboard">
         <span className="sb-mark">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8">
             <circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/>
@@ -56,7 +56,7 @@ export default function Sidebar() {
           <div className="sb-brand-name">Aussie EcoLens</div>
           <div className="sb-brand-sub">Observatory</div>
         </div>
-      </div>
+      </Link>
 
       <div className="sb-section">Observatory</div>
 
