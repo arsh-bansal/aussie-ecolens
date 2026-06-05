@@ -67,6 +67,8 @@ export default function ProfilePage() {
     .map(s => s![0].toUpperCase())
     .join('') || user?.email[0].toUpperCase() || '?';
 
+  const displayName = [user?.given_name, user?.family_name].filter(Boolean).join(' ') || 'Observer';
+
   return (
     <>
       <header className="topbar">
@@ -76,119 +78,155 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      <div className="page" style={{ maxWidth: '680px' }}>
-        {/* Identity card */}
-        <div className="panel" style={{ marginBottom: '22px' }}>
-          <div className="panel-body" style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 24px' }}>
-            <div style={{
-              width: '60px', height: '60px', borderRadius: '50%', flexShrink: 0,
-              background: 'var(--ochre-tint)', color: 'var(--ochre)',
-              display: 'grid', placeItems: 'center',
-              fontSize: '22px', fontWeight: 700, fontFamily: 'var(--font-serif)',
-            }}>
-              {initials}
+      <div className="page">
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '24px', alignItems: 'start' }}>
+
+          {/* Left column — identity */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="panel">
+              <div style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', textAlign: 'center' }}>
+                <div style={{
+                  width: '80px', height: '80px', borderRadius: '50%', flexShrink: 0,
+                  background: 'var(--ochre-tint)',
+                  border: '3px solid var(--ochre)',
+                  display: 'grid', placeItems: 'center',
+                  fontSize: '28px', fontWeight: 700, fontFamily: 'var(--font-serif)',
+                  color: 'var(--ochre)',
+                }}>
+                  {initials}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '18px', lineHeight: 1.2 }}>{displayName}</div>
+                  <div style={{ fontSize: '12.5px', color: 'var(--ink-faint)', marginTop: '5px', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                    {user?.email}
+                  </div>
+                </div>
+                <span className="badge badge-euc" style={{ fontSize: '11px', padding: '3px 12px' }}>Observer</span>
+              </div>
             </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '17px' }}>
-                {[user?.given_name, user?.family_name].filter(Boolean).join(' ') || 'Observer'}
+
+            {/* Account info strip */}
+            <div className="panel">
+              <div className="panel-head"><h3>Account</h3></div>
+              <div style={{ padding: '4px 0 8px' }}>
+                {[
+                  { label: 'Role', value: 'Observer' },
+                  { label: 'Auth', value: 'AWS Cognito' },
+                  { label: 'Region', value: 'ap-southeast-2' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 24px', borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>{label}</span>
+                    <span style={{ fontSize: '12.5px', fontFamily: 'var(--font-mono)', color: 'var(--ink-faint)' }}>{value}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 24px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>Project</span>
+                  <span style={{ fontSize: '12.5px', fontFamily: 'var(--font-mono)', color: 'var(--ink-faint)' }}>Aussie EcoLens</span>
+                </div>
               </div>
-              <div style={{ fontSize: '13.5px', color: 'var(--ink-soft)', marginTop: '3px', fontFamily: 'var(--font-mono)' }}>
-                {user?.email}
-              </div>
-              <span className="badge badge-euc" style={{ marginTop: '8px', display: 'inline-flex' }}>Observer</span>
             </div>
           </div>
-        </div>
 
-        {/* Update name */}
-        <div className="panel" style={{ marginBottom: '20px' }}>
-          <div className="panel-head"><h3>Display name</h3></div>
-          <form onSubmit={handleName} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-              <div className="field">
-                <label htmlFor="fn">First name</label>
-                <input
-                  className="input" id="fn" type="text"
-                  value={nameForm.firstName}
-                  onChange={e => setNameForm(f => ({ ...f, firstName: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="ln">Last name</label>
-                <input
-                  className="input" id="ln" type="text"
-                  value={nameForm.lastName}
-                  onChange={e => setNameForm(f => ({ ...f, lastName: e.target.value }))}
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <button className="btn btn-primary" type="submit" disabled={savingName}>
-                {savingName ? 'Saving…' : 'Save name'}
-              </button>
-            </div>
-          </form>
-        </div>
+          {/* Right column — forms */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-        {/* Email (read-only) */}
-        <div className="panel" style={{ marginBottom: '20px' }}>
-          <div className="panel-head"><h3>Email address</h3></div>
-          <div style={{ padding: '18px 24px' }}>
-            <div className="field">
-              <label>Email</label>
-              <input className="input" type="email" value={user?.email ?? ''} readOnly style={{ opacity: 0.6, cursor: 'not-allowed' }} />
+            {/* Update name */}
+            <div className="panel">
+              <div className="panel-head">
+                <h3>Display name</h3>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-faint)' }}>This is how you appear across the observatory.</p>
+              </div>
+              <form onSubmit={handleName} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div className="field">
+                    <label htmlFor="fn">First name</label>
+                    <input
+                      className="input" id="fn" type="text"
+                      value={nameForm.firstName}
+                      onChange={e => setNameForm(f => ({ ...f, firstName: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="ln">Last name</label>
+                    <input
+                      className="input" id="ln" type="text"
+                      value={nameForm.lastName}
+                      onChange={e => setNameForm(f => ({ ...f, lastName: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <button className="btn btn-primary" type="submit" disabled={savingName}>
+                    {savingName ? 'Saving…' : 'Save name'}
+                  </button>
+                </div>
+              </form>
             </div>
-            <p style={{ fontSize: '12.5px', color: 'var(--ink-faint)', marginTop: '8px' }}>
-              Email is tied to your Cognito identity and cannot be changed here.
-            </p>
+
+            {/* Email (read-only) */}
+            <div className="panel">
+              <div className="panel-head">
+                <h3>Email address</h3>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-faint)' }}>Tied to your Cognito identity — cannot be changed here.</p>
+              </div>
+              <div style={{ padding: '18px 24px' }}>
+                <div className="field">
+                  <label>Email</label>
+                  <input className="input" type="email" value={user?.email ?? ''} readOnly style={{ opacity: 0.55, cursor: 'not-allowed' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Change password */}
+            <div className="panel">
+              <div className="panel-head">
+                <h3>Change password</h3>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-faint)' }}>You will be signed out after a successful change.</p>
+              </div>
+              <form onSubmit={handlePassword} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="field">
+                  <label htmlFor="cpw">Current password</label>
+                  <input
+                    className="input" id="cpw" type="password"
+                    placeholder="Enter current password"
+                    value={pwForm.current}
+                    onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div className="field">
+                    <label htmlFor="npw">New password</label>
+                    <input
+                      className="input" id="npw" type="password"
+                      placeholder="8+ chars, uppercase, number"
+                      value={pwForm.next}
+                      onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="cpw2">Confirm new password</label>
+                    <input
+                      className="input" id="cpw2" type="password"
+                      placeholder="Repeat new password"
+                      value={pwForm.confirm}
+                      onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <button className="btn btn-primary" type="submit" disabled={savingPw || !pwForm.current || !pwForm.next || !pwForm.confirm}>
+                    {savingPw ? 'Changing…' : 'Change password'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
           </div>
-        </div>
-
-        {/* Change password */}
-        <div className="panel">
-          <div className="panel-head"><h3>Change password</h3></div>
-          <form onSubmit={handlePassword} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div className="field">
-              <label htmlFor="cpw">Current password</label>
-              <input
-                className="input" id="cpw" type="password"
-                placeholder="Enter current password"
-                value={pwForm.current}
-                onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="npw">New password</label>
-              <input
-                className="input" id="npw" type="password"
-                placeholder="8+ chars, uppercase, number"
-                value={pwForm.next}
-                onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="cpw2">Confirm new password</label>
-              <input
-                className="input" id="cpw2" type="password"
-                placeholder="Repeat new password"
-                value={pwForm.confirm}
-                onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <button className="btn btn-primary" type="submit" disabled={savingPw || !pwForm.current || !pwForm.next || !pwForm.confirm}>
-                {savingPw ? 'Changing…' : 'Change password'}
-              </button>
-            </div>
-            <p style={{ fontSize: '12.5px', color: 'var(--ink-faint)', margin: 0 }}>
-              You will be signed out after a successful password change.
-            </p>
-          </form>
         </div>
       </div>
     </>
