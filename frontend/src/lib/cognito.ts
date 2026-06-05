@@ -155,6 +155,37 @@ export function getUserAttributes(): Promise<Record<string, string>> {
   });
 }
 
+export function updateUserAttributes(attrs: Record<string, string>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const user = pool().getCurrentUser();
+    if (!user) { reject(new Error('No current user')); return; }
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
+      if (err || !session) { reject(err ?? new Error('No session')); return; }
+      const cognitoAttrs = Object.entries(attrs).map(
+        ([Name, Value]) => new CognitoUserAttribute({ Name, Value })
+      );
+      user.updateAttributes(cognitoAttrs, (attrErr) => {
+        if (attrErr) reject(attrErr);
+        else resolve();
+      });
+    });
+  });
+}
+
+export function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const user = pool().getCurrentUser();
+    if (!user) { reject(new Error('No current user')); return; }
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
+      if (err || !session) { reject(err ?? new Error('No session')); return; }
+      user.changePassword(oldPassword, newPassword, (pwErr) => {
+        if (pwErr) reject(pwErr);
+        else resolve();
+      });
+    });
+  });
+}
+
 export function forgotPassword(email: string): Promise<void> {
   return new Promise((resolve, reject) => {
     new CognitoUser({ Username: email, Pool: pool() }).forgotPassword({

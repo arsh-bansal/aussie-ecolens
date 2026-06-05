@@ -72,7 +72,7 @@ export default function Sidebar() {
 
       <div className={`sb-foot${open ? ' open' : ''}`}>
         <div className="sb-menu">
-          <a href="#">
+          <a href="/profile">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6 8-6s8 2 8 6" strokeLinecap="round"/></svg>
             Profile
           </a>
