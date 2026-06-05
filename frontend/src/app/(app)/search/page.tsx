@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import Modal from '@/components/ui/Modal';
 import type { SearchResult } from '@/types';
 
 type SearchMode = 'species' | 'tags' | 'file';
@@ -25,13 +26,20 @@ const SPECIES_OPTIONS = [
   'Superb Lyrebird', 'Swamp Wallaby', 'White-winged Chough', 'Wild Pig',
 ];
 
-function ResultCard({ r }: { r: SearchResult }) {
+function ResultCard({ r, onOpen }: { r: SearchResult; onOpen: () => void }) {
   const topTag = Object.entries(r.tags ?? {}).sort((a, b) => b[1] - a[1])[0];
   const species = topTag?.[0] ?? 'Unknown species';
   const conf = topTag?.[1] ?? 0;
 
   return (
-    <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', transition: 'transform .16s ease, box-shadow .16s ease' }}>
+    <div
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+      title="Click to view full-size"
+      style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', transition: 'transform .16s ease, box-shadow .16s ease' }}
+    >
       <div style={{ position: 'relative', height: '158px', overflow: 'hidden', background: 'var(--sand-200)' }}>
         {r.thumbnail_url
           // eslint-disable-next-line @next/next/no-img-element
@@ -63,6 +71,7 @@ export default function SearchPage() {
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SearchResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const search = async (e?: React.FormEvent) => {
@@ -190,7 +199,7 @@ export default function SearchPage() {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px' }}>
-                {results.map(r => <ResultCard key={r.file_id} r={r} />)}
+                {results.map(r => <ResultCard key={r.file_id} r={r} onOpen={() => setSelected(r)} />)}
               </div>
             )}
           </>
@@ -203,6 +212,30 @@ export default function SearchPage() {
           </div>
         )}
       </div>
+
+      {/* Full-size lightbox: clicking a result requests the full-size media
+          (rubric 4.3 — thumbnails preview, click for full-size). */}
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        size="xl"
+        title={selected ? Object.entries(selected.tags ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'Detection' : undefined}
+        description={selected?.file_type === 'video' ? 'Full-size video' : 'Full-size image'}
+      >
+        {selected && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {selected.file_type === 'video' ? (
+              <video src={selected.url} controls style={{ width: '100%', borderRadius: 'var(--r-md)', background: '#000' }} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={selected.url} alt="Full-size detection" style={{ width: '100%', height: 'auto', borderRadius: 'var(--r-md)' }} />
+            )}
+            <a href={selected.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+              Open original in new tab
+            </a>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }
