@@ -4,13 +4,16 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
+// The `tag` MUST be the exact canonical species name the Tagger stores and the
+// Notifier publishes — SNS filter policies match it by case-sensitive exact
+// string. Only species in the model's taxonomy can ever fire an alert.
 const PRESET_SPECIES = [
-  { name: 'Southern Cassowary', tag: 'cassowary', icoStyle: { background: 'var(--gold-soft)', color: 'var(--gold)' } },
-  { name: 'Koala', tag: 'koala', icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' } },
-  { name: 'Red Fox (invasive)', tag: 'fox', icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' } },
-  { name: 'Feral Cat (invasive)', tag: 'cat', icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' } },
-  { name: 'Quokka', tag: 'quokka', icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' } },
-  { name: 'Low-confidence digest', tag: 'low-confidence', icoStyle: { background: 'oklch(0.20 0.012 48)', color: 'var(--ink-faint)' } },
+  { name: 'Southern Cassowary', tag: 'Southern Cassowary', icoStyle: { background: 'var(--gold-soft)', color: 'var(--gold)' } },
+  { name: 'Red Fox (invasive)', tag: 'Red Fox', icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' } },
+  { name: 'Domestic Cat (invasive)', tag: 'Domestic Cat', icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' } },
+  { name: 'Dingo', tag: 'Dingo', icoStyle: { background: 'var(--ochre-tint)', color: 'var(--ochre)' } },
+  { name: 'Eastern Grey Kangaroo', tag: 'Eastern Grey Kangaroo', icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' } },
+  { name: 'Common Wombat', tag: 'Common Wombat', icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' } },
 ];
 
 export default function NotificationsPage() {
@@ -40,7 +43,7 @@ export default function NotificationsPage() {
   const handleCustom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customTag.trim()) return;
-    await subscribe(customTag.trim().toLowerCase());
+    await subscribe(customTag.trim());
     setCustomTag('');
   };
 
@@ -105,7 +108,7 @@ export default function NotificationsPage() {
               <form onSubmit={handleCustom} style={{ display: 'flex', gap: '10px' }}>
                 <input
                   className="input"
-                  placeholder="e.g. echidna, wombat…"
+                  placeholder="e.g. echidna, dingo, wild pig…"
                   value={customTag}
                   onChange={e => setCustomTag(e.target.value)}
                   style={{ flex: 1, padding: '10px 13px', fontSize: '14px' }}

@@ -3,7 +3,9 @@
 import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import type { PresignResponse, UploadStatus } from '@/types';
+import type { PresignResponse, UploadStatus, FileStatusResponse } from '@/types';
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 async function hashFile(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -15,18 +17,19 @@ const STEP_LABELS = [
   { key: 'hashing',   name: 'Ingest & SHA-256 hash',  done: 'done',    badge: 'badge-euc' },
   { key: 'checking',  name: 'Duplicate check',         done: 'done',    badge: 'badge-euc' },
   { key: 'uploading', name: 'Upload to S3',            done: 'done',    badge: 'badge-euc' },
-  { key: 'complete',  name: 'MegaDetector + SpeciesNet', done: 'queued', badge: 'badge-ochre' },
+  { key: 'complete',  name: 'MegaDetector + SpeciesNet', done: 'tagged', badge: 'badge-euc' },
 ];
 
 const STATUS_ORDER: UploadStatus[] = ['idle', 'hashing', 'checking', 'uploading', 'complete', 'duplicate', 'error'];
 
-function stepState(stepKey: string, status: UploadStatus): 'done' | 'active' | 'idle' {
+function stepState(stepKey: string, status: UploadStatus, taggingDone = false): 'done' | 'active' | 'idle' {
   const STEPS = ['hashing', 'checking', 'uploading', 'complete'];
   const stepIdx = STEPS.indexOf(stepKey);
   const currentIdx = STATUS_ORDER.indexOf(status);
 
   if (status === 'complete' || status === 'duplicate') {
-    return stepIdx <= 2 ? 'done' : 'active';
+    if (stepIdx <= 2) return 'done';
+    return taggingDone ? 'done' : 'active';  // tagging step: done once polled as tagged
   }
   if (status === 'error') {
     // Only mark steps before the one that failed as done
@@ -46,6 +49,8 @@ export default function UploadPage() {
   const [result, setResult] = useState<PresignResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sha, setSha] = useState<string>('');
+  const [tagged, setTagged] = useState<FileStatusResponse | null>(null);
+  const [tagTimedOut, setTagTimedOut] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((f: File) => {
@@ -54,8 +59,23 @@ export default function UploadPage() {
     setResult(null);
     setError(null);
     setSha('');
+    setTagged(null);
+    setTagTimedOut(false);
     setProgress(0);
   }, []);
+
+  // Tagging is async on the backend; poll its status until tagged (or give up).
+  const pollTagging = async (fullHash: string) => {
+    const deadline = Date.now() + 120_000;  // ML cold start + inference can be slow
+    while (Date.now() < deadline) {
+      await sleep(3000);
+      try {
+        const s = await api.getFileStatus(fullHash);
+        if (s.status === 'tagged') { setTagged(s); return; }
+      } catch { /* transient — keep polling */ }
+    }
+    setTagTimedOut(true);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -93,18 +113,23 @@ export default function UploadPage() {
       setStatus('uploading');
       await api.uploadToPresignedUrl(presign.upload_url!, file, setProgress);
 
-      // 4. Done
+      // 4. Done uploading — tagging continues async on the backend; poll for it.
       setStatus('complete');
       setResult(presign);
+      pollTagging(hash);
     } catch (err: unknown) {
       setStatus('error');
       setError(err instanceof Error ? err.message : 'Upload failed');
     }
   };
 
-  const topTags = result?.tags
-    ? Object.entries(result.tags).sort((a, b) => b[1] - a[1]).slice(0, 3)
-    : [];
+  // Prefer the polled tagging result (new uploads); fall back to dedup tags.
+  const detectedTags =
+    tagged?.tags && Object.keys(tagged.tags).length > 0
+      ? tagged.tags
+      : (result?.tags ?? {});
+  const topTags = Object.entries(detectedTags).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const taggingDone = status === 'duplicate' || !!tagged;
 
   return (
     <>
@@ -171,7 +196,7 @@ export default function UploadPage() {
                 </div>
                 <div className="panel-body" style={{ paddingTop: '6px', paddingBottom: '10px' }}>
                   {STEP_LABELS.map((step, i) => {
-                    const state = stepState(step.key, status);
+                    const state = stepState(step.key, status, taggingDone);
                     return (
                       <div key={step.key} style={{ display: 'flex', gap: '15px', padding: '15px 0', position: 'relative' }}>
                         {i < STEP_LABELS.length - 1 && <div style={{ position: 'absolute', left: '18px', top: '44px', bottom: '-6px', width: '2px', background: state === 'done' ? 'var(--euc)' : 'var(--line)' }} />}
@@ -193,6 +218,20 @@ export default function UploadPage() {
                           {step.key === 'uploading' && status === 'uploading' && (
                             <div style={{ marginTop: '8px', height: '4px', borderRadius: '999px', background: 'var(--sand-200)', overflow: 'hidden' }}>
                               <div style={{ width: `${progress}%`, height: '100%', background: 'var(--euc)', borderRadius: '999px', transition: 'width .2s' }} />
+                            </div>
+                          )}
+                          {step.key === 'complete' && state === 'done' && (
+                            <div style={{ fontSize: '12px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+                              {Object.keys(detectedTags).length > 0
+                                ? `Detected: ${Object.entries(detectedTags).map(([t, c]) => `${t} (${c})`).join(', ')}`
+                                : 'No animals detected.'}
+                            </div>
+                          )}
+                          {step.key === 'complete' && state === 'active' && (
+                            <div style={{ fontSize: '12px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+                              {tagTimedOut
+                                ? 'Still processing in the background — check Search shortly.'
+                                : 'Running detection… this can take up to a minute (model cold start).'}
                             </div>
                           )}
                         </div>
@@ -231,7 +270,7 @@ export default function UploadPage() {
               <div className="panel">
                 <div className="panel-head"><h3>Detection record</h3></div>
                 <div className="panel-body">
-                  {result.tags && Object.keys(result.tags).length > 0 ? (
+                  {Object.keys(detectedTags).length > 0 ? (
                     <>
                       <div style={{ marginBottom: '16px' }}>
                         <div style={{ fontWeight: 700, fontSize: '16px' }}>{topTags[0]?.[0] ?? 'Species detected'}</div>

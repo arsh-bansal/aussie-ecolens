@@ -10,8 +10,9 @@ from pathlib import Path
 
 from flask import Blueprint, request, jsonify
 from auth import require_auth
-from cosmos_client import query_user_files
+from cosmos_client import query_files
 from tagging import tag_image_file
+from s3_presign import presign_s3_uri
 
 query_file_bp = Blueprint("query_file", __name__)
 
@@ -19,11 +20,13 @@ _ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 
 
 def _format_result(doc: dict) -> dict:
+    # DB stores canonical s3:// URIs; hand back short-lived presigned https URLs
+    # so the browser can load them while the buckets stay private.
     return {
         "file_id":       doc.get("id"),
         "file_type":     doc.get("file_type"),
-        "url":           doc.get("s3_url"),
-        "thumbnail_url": doc.get("thumbnail_url"),
+        "url":           presign_s3_uri(doc.get("s3_url")),
+        "thumbnail_url": presign_s3_uri(doc.get("thumbnail_url")),
         "tags":          doc.get("tags", {}),
     }
 
@@ -47,8 +50,6 @@ def query_file():
                      "Video query-by-file is not supported."
         }), 415
 
-    user_id = request.user_id
-
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp_path = tmp.name
         uploaded.save(tmp_path)
@@ -60,7 +61,7 @@ def query_file():
             return jsonify({"results": [], "detected_tags": {}}), 200
 
         species_list = list(detected_tags.keys())
-        docs = query_user_files(user_id=user_id, species_presence=species_list)
+        docs = query_files(species_presence=species_list)
 
         return jsonify({
             "results":       [_format_result(d) for d in docs],

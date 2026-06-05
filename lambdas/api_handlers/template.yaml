@@ -30,6 +30,13 @@ Parameters:
     Type: String
     Description: Name of Arsh's tag-only Lambda for /search/by-file (2.2.3).
     Default: "aussie-ecolens-query-tagger"
+  SnsTopicArn:
+    Type: String
+    Description: >
+      ARN of the tag-notifications SNS topic (created by the notifier stack).
+      /tags/subscribe adds the user's email to this topic with a per-tag
+      filter policy (2.3.3).
+    Default: "arn:aws:sns:ap-southeast-2:247622885425:aussie-ecolens-tag-notifications"
 
 Globals:
   Function:
@@ -48,6 +55,10 @@ Globals:
         S3_BUCKET_NAME: aussie-ecolens-uploads-247622885425
         TAGGER_LAMBDA_NAME: !Ref TaggerLambdaName
         DYNAMODB_TABLE: aussie-ecolens-files
+        SNS_TOPIC_ARN: !Ref SnsTopicArn
+        # Must match the MessageAttribute the Notifier publishes on, so the
+        # subscribe filter policy actually matches detections.
+        SPECIES_ATTRIBUTE: species
 
 Resources:
   QueryApi:
@@ -90,6 +101,22 @@ Resources:
         # (the Replicator then mirrors the change to Cosmos via the stream).
         - DynamoDBCrudPolicy:
             TableName: aussie-ecolens-files
+        # /tags/subscribe adds an email subscription (with a filter policy) to
+        # the tag-notifications topic. Least privilege: subscribe + list only.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Subscribe
+                - sns:ListSubscriptionsByTopic
+              Resource: !Ref SnsTopicArn
+            # Get/SetSubscriptionAttributes act on the subscription ARN, which
+            # SNS does not support scoping by topic, so these need Resource "*".
+            # Used to widen a user's existing filter policy when they add a tag.
+            - Effect: Allow
+              Action:
+                - sns:GetSubscriptionAttributes
+                - sns:SetSubscriptionAttributes
+              Resource: "*"
       Events:
         # Single catch-all: every path + method forwards to Flask, which owns
         # the real routing (/search/tags, /search/species, /search/by-thumbnail,

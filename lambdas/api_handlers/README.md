@@ -17,7 +17,7 @@ as AWS Lambda, reading from Azure Cosmos DB.
 | `tags_handler.py` | `POST /tags` — bulk add/remove tags |
 | `delete_handler.py` | `DELETE /files` — remove files from S3 + Cosmos |
 | `tagging.py` | ML pipeline wrapper (MegaDetector + SpeciesNet) |
-| `species_map.py` | Scientific name → common name lookup |
+| `species_catalog.py` | Canonical species registry + free-form input → canonical name resolution |
 | `template.yaml` | SAM/CloudFormation deployment template |
 | `requirements.txt` | Python dependencies |
 
