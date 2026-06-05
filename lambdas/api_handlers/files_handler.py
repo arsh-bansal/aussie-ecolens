@@ -5,10 +5,35 @@ Primary path: Arsh's Tagger writes to DynamoDB → Replicator → Cosmos.
 from flask import Blueprint, request, jsonify
 from auth import require_auth
 from cosmos_client import get_file_by_sha, _get_container
+from s3_presign import presign_s3_uri
 from azure.cosmos import exceptions
 from datetime import datetime, timezone
 
 files_bp = Blueprint("files", __name__)
+
+
+@files_bp.route("/files/status/<sha>", methods=["GET"])
+@require_auth
+def file_status(sha):
+    """Poll the tagging status of an uploaded file (by checksum).
+
+    Tagging is asynchronous (S3 event → Tagger → DynamoDB → Replicator →
+    Cosmos), so the upload UI polls this after a successful upload to know when
+    detection has finished. Scoped to the caller's own files via the partition
+    key. Returns status="pending" (200) until the record exists and is tagged,
+    so the client can poll without treating "not ready yet" as an error.
+    """
+    doc = get_file_by_sha(sha, request.user_id)
+    if not doc:
+        return jsonify({"status": "pending", "tags": {}}), 200
+
+    return jsonify({
+        "status":        doc.get("status", "pending"),
+        "file_type":     doc.get("file_type"),
+        "tags":          doc.get("tags", {}),
+        "url":           presign_s3_uri(doc.get("s3_url")),
+        "thumbnail_url": presign_s3_uri(doc.get("thumbnail_url")),
+    }), 200
 
 
 @files_bp.route("/files", methods=["POST"])

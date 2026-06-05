@@ -7,8 +7,10 @@ Routes:
   POST /search/by-thumbnail  — thumbnail URL → full-size URL (2.2.2)
   POST /search/by-file       — tag uploaded image + find matches (2.2.3)
   POST /tags/modify          — bulk add/remove tags (2.3.1)
+  POST /tags/subscribe       — email alert subscription via SNS (2.3.3)
   POST /files/delete         — delete files from S3 + Cosmos (2.3.2)
   POST /files                — manual write (fallback, not primary path)
+  GET  /files/status/<sha>   — poll async tagging status after upload
 """
 
 import os
@@ -19,6 +21,7 @@ from search_handler     import search_bp
 from thumbnail_handler  import thumbnail_bp
 from query_file_handler import query_file_bp
 from tags_handler       import tags_bp
+from subscribe_handler  import subscribe_bp
 from delete_handler     import delete_bp
 from files_handler      import files_bp
 
@@ -29,6 +32,7 @@ app.register_blueprint(search_bp)
 app.register_blueprint(thumbnail_bp)
 app.register_blueprint(query_file_bp)
 app.register_blueprint(tags_bp)
+app.register_blueprint(subscribe_bp)
 app.register_blueprint(delete_bp)
 app.register_blueprint(files_bp)
 
