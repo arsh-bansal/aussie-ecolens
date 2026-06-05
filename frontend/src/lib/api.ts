@@ -8,6 +8,7 @@ import type {
   DeleteFilesResponse,
   SubscribeRequest,
   SubscribeResponse,
+  FileStatusResponse,
   SearchResponse,
   TagSearchRequest,
   SpeciesSearchRequest,
@@ -95,6 +96,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  // Poll async tagging status after an upload (status: "pending" → "tagged").
+  getFileStatus: (sha: string) =>
+    queryApi<FileStatusResponse>(`/files/status/${sha}`, { method: "GET" }),
 
   searchByTags: (body: TagSearchRequest) =>
     queryApi<SearchResponse>("/search/tags", {

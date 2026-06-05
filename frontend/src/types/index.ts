@@ -30,6 +30,14 @@ export interface SearchResponse {
   results: SearchResult[];
 }
 
+export interface FileStatusResponse {
+  status: string;
+  file_type?: FileType;
+  tags: Record<string, number>;
+  url?: string;
+  thumbnail_url?: string;
+}
+
 export interface PresignRequest {
   sha256: string;
   filename: string;
