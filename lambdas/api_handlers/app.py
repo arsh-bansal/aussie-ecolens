@@ -10,6 +10,7 @@ Routes:
   POST /tags/subscribe       — email alert subscription via SNS (2.3.3)
   POST /files/delete         — delete files from S3 + Cosmos (2.3.2)
   POST /files                — manual write (fallback, not primary path)
+  GET  /files/list           — list caller's files (Manage page)
   GET  /files/status/<sha>   — poll async tagging status after upload
 """
 

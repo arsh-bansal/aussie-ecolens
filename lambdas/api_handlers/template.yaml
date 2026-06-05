@@ -85,6 +85,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${AppName}-query-api"
+      Timeout: 120
+      MemorySize: 1024
       CodeUri: ./
       Handler: lambda_handler.handler
       Policies:

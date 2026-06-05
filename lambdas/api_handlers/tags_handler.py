@@ -1,29 +1,49 @@
 """
 POST /tags/modify — bulk add/remove tags (2.3.1)
 Body: {"urls": [...], "tags": [...], "operation": 0|1}
-Response: {"updated": <count>, "failed": [<urls>]}
+Response: {"updated": <count>, "failed": [<urls>], "records": [{file_id, tags}]}
 
 CQRS: reads the current tag map from Cosmos (read model), computes the new map,
-then WRITES to DynamoDB (system of record). The Replicator mirrors the change
-back to Cosmos via the stream. Writes never touch Cosmos directly.
+writes to DynamoDB (system of record), then updates Cosmos immediately so Search
+does not wait on the Replicator stream (~1-2s lag).
 """
 
 from flask import Blueprint, request, jsonify
 from auth import require_auth
-from cosmos_client import get_file_by_sha          # read current tags (read model)
-from dynamodb_client import update_file_tags        # write (system of record)
+from cosmos_client import get_file_by_sha_global, update_file_tags_cosmos
+from dynamodb_client import update_file_tags
+from species_catalog import normalize_tag_key
 
 tags_bp = Blueprint("tags", __name__)
 
 
-def _sha_from_url(s3_url: str) -> str | None:
+def _sha_from_url(url: str) -> str | None:
+    """Extract the file checksum from an s3:// URI or presigned https URL."""
     try:
-        path     = s3_url.split("://", 1)[-1]
-        key      = path.split("/", 1)[1]
+        path = url.split("?")[0].split("://", 1)[-1]
+        key = path.split("/", 1)[1]
         filename = key.rsplit("/", 1)[-1]
         return filename.rsplit(".", 1)[0]
     except (IndexError, ValueError):
         return None
+
+
+def _apply_tag_changes(current_tags: dict, tags: list[str], operation: int) -> dict:
+    updated = dict(current_tags)
+    if operation == 1:
+        for tag in tags:
+            key = normalize_tag_key(tag)
+            if key:
+                updated[key] = updated.get(key, 0) + 1
+    else:
+        for tag in tags:
+            key = normalize_tag_key(tag)
+            if not key:
+                continue
+            for existing in list(updated.keys()):
+                if normalize_tag_key(existing) == key:
+                    updated.pop(existing, None)
+    return updated
 
 
 @tags_bp.route("/tags/modify", methods=["POST"])
@@ -44,9 +64,9 @@ def bulk_tag():
     if operation not in (0, 1):
         return jsonify({"error": "'operation' must be 0 (remove) or 1 (add)"}), 400
 
-    user_id = request.user_id
     updated = []
     failed  = []
+    records = []
 
     for url in urls:
         sha = _sha_from_url(url)
@@ -55,29 +75,21 @@ def bulk_tag():
             continue
 
         try:
-            # Read current tags from the read model (Cosmos).
-            doc = get_file_by_sha(sha, user_id)
+            doc = get_file_by_sha_global(sha)
             if doc is None:
                 failed.append(url)
                 continue
 
-            current_tags: dict = dict(doc.get("tags", {}))
+            new_tags = _apply_tag_changes(dict(doc.get("tags", {})), tags, operation)
 
-            if operation == 1:  # add
-                for tag in tags:
-                    current_tags[tag] = current_tags.get(tag, 0) + 1
-            else:               # remove — ignores tags that aren't assigned
-                for tag in tags:
-                    current_tags.pop(tag, None)
-
-            # Write to the system of record (DynamoDB). Replicator -> Cosmos.
-            if update_file_tags(sha, user_id, current_tags):
+            if update_file_tags(sha, new_tags):
+                update_file_tags_cosmos(sha, doc["user_id"], new_tags)
                 updated.append(url)
+                records.append({"file_id": sha, "tags": new_tags})
             else:
                 failed.append(url)
 
         except Exception:
             failed.append(url)
 
-    return jsonify({"updated": len(updated), "failed": failed}), 200
-    
+    return jsonify({"updated": len(updated), "failed": failed, "records": records}), 200

@@ -27,8 +27,9 @@ import type {
 // Functions, so the NEXT_PUBLIC_AZURE_API_BASE name is historical. It points at
 // the AWS query-API base URL (…execute-api.ap-southeast-2.amazonaws.com, $default
 // stage, no path suffix).
-const AWS_BASE = process.env.NEXT_PUBLIC_AWS_API_BASE ?? "";
-const QUERY_BASE = process.env.NEXT_PUBLIC_AZURE_API_BASE ?? "";
+const trimBase = (url: string) => url.replace(/\/+$/, "");
+const AWS_BASE = trimBase(process.env.NEXT_PUBLIC_AWS_API_BASE ?? "");
+const QUERY_BASE = trimBase(process.env.NEXT_PUBLIC_AZURE_API_BASE ?? "");
 
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await getIdToken();
@@ -49,10 +50,12 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(
-      (data as { error?: { message?: string } })?.error?.message ??
-        `Request failed with status ${res.status}`,
-    );
+    const err = data as { error?: string | { message?: string } };
+    const message =
+      typeof err?.error === 'string'
+        ? err.error
+        : err?.error?.message ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
   }
   return data as T;
 }
@@ -101,6 +104,9 @@ export const api = {
   getFileStatus: (sha: string) =>
     queryApi<FileStatusResponse>(`/files/status/${sha}`, { method: "GET" }),
 
+  listFiles: () =>
+    queryApi<SearchResponse>("/files/list", { method: "GET" }),
+
   searchByTags: (body: TagSearchRequest) =>
     queryApi<SearchResponse>("/search/tags", {
       method: "POST",
@@ -121,21 +127,42 @@ export const api = {
 
   async searchByFile(file: File): Promise<SearchResponse> {
     const token = await getIdToken();
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch(`${QUERY_BASE}/search/by-file`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(
-        (data as { error?: { message?: string } })?.error?.message ??
-          `Request failed with status ${res.status}`,
-      );
+
+    const attempt = async () => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${QUERY_BASE}/search/by-file`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = data as { error?: string | { message?: string } };
+        const message =
+          typeof err?.error === "string"
+            ? err.error
+            : err?.error?.message ??
+              (res.status === 503
+                ? "ML model is warming up — wait 30 seconds and try again."
+                : `Request failed with status ${res.status}`);
+        const error = new Error(message);
+        (error as Error & { retriable?: boolean }).retriable = res.status === 503;
+        throw error;
+      }
+      return data as SearchResponse;
+    };
+
+    try {
+      return await attempt();
+    } catch (e) {
+      const err = e as Error & { retriable?: boolean };
+      if (err.retriable) {
+        await new Promise(r => setTimeout(r, 8000));
+        return await attempt();
+      }
+      throw e;
     }
-    return data as SearchResponse;
   },
 
   uploadToPresignedUrl(

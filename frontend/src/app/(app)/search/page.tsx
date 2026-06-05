@@ -57,7 +57,10 @@ function ResultCard({ r, onOpen }: { r: SearchResult; onOpen: () => void }) {
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--ink-faint)', marginTop: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {r.file_id}
         </div>
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {Object.keys(r.tags ?? {}).map(t => (
+            <span key={t} className="tag" style={{ fontSize: '10px' }}>{t}</span>
+          ))}
           <span className={`badge ${r.file_type === 'video' ? 'badge-sky' : 'badge-mute'}`}>{r.file_type}</span>
         </div>
       </div>

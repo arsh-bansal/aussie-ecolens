@@ -68,6 +68,11 @@ def query_file():
             "detected_tags": detected_tags,
         }), 200
 
+    except RuntimeError as e:
+        msg = str(e)
+        if "warming up" in msg.lower() or "cold start" in msg.lower():
+            return jsonify({"error": msg}), 503
+        return jsonify({"error": msg}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
