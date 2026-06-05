@@ -63,6 +63,7 @@ export interface TagModifyRequest {
 export interface TagModifyResponse {
   updated: number;
   failed: string[];
+  records?: { file_id: string; tags: Record<string, number> }[];
 }
 
 export interface DeleteFilesRequest {

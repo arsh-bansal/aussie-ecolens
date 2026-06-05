@@ -249,6 +249,9 @@ Resources:
       FunctionName: !Sub "${ProjectPrefix}-query-tagger"
       PackageType: Image
       ImageUri: !Ref ImageUri
+      AutoPublishAlias: live
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 1
       ImageConfig:
         Command:
           - aussie_ecolens_tagger.query_handler.lambda_handler

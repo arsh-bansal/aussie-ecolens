@@ -48,15 +48,11 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def update_file_tags(sha: str, user_id: str, new_tags: dict[str, int]) -> bool:
+def update_file_tags(sha: str, new_tags: dict[str, int]) -> bool:
     """Set the tags map on the file's DynamoDB record (system of record).
 
-    The Replicator mirrors the change to Cosmos via the stream. We scope the
-    write with a ConditionExpression on user_id so a user can only edit their
-    own files (defence in depth on top of the JWT/authorizer).
-
-    Returns True on success, False if the item doesn't exist or isn't owned by
-    this user.
+    Any authenticated user may edit tags on any file in the shared observatory.
+    The Replicator mirrors the change to Cosmos via the stream.
     """
     tags_av = {"M": {name: {"N": str(int(c))} for name, c in new_tags.items()}}
     try:
@@ -64,36 +60,31 @@ def update_file_tags(sha: str, user_id: str, new_tags: dict[str, int]) -> bool:
             TableName=TABLE_NAME,
             Key=_key(sha),
             UpdateExpression="SET #tags = :tags, updated_at = :now",
-            ConditionExpression="attribute_exists(pk) AND user_id = :uid",
+            ConditionExpression="attribute_exists(pk)",
             ExpressionAttributeNames={"#tags": "tags"},
             ExpressionAttributeValues={
                 ":tags": tags_av,
                 ":now": {"S": _now()},
-                ":uid": {"S": user_id},
             },
         )
         return True
     except ClientError as e:
         if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            return False  # not found, or not owned by this user
+            return False
         raise
 
 
-def delete_file_record(sha: str, user_id: str) -> bool:
+def delete_file_record(sha: str) -> bool:
     """Delete the file's DynamoDB record (system of record).
 
-    The Replicator deletes the corresponding Cosmos document via the stream
-    REMOVE event. Scoped to the owner with a ConditionExpression.
-
-    Returns True if an owned item was deleted, False if it didn't exist / isn't
-    owned by this user.
+    Any authenticated user may delete files in the shared observatory.
+    The Replicator removes the Cosmos document via the stream REMOVE event.
     """
     try:
         _get_client().delete_item(
             TableName=TABLE_NAME,
             Key=_key(sha),
-            ConditionExpression="attribute_exists(pk) AND user_id = :uid",
-            ExpressionAttributeValues={":uid": {"S": user_id}},
+            ConditionExpression="attribute_exists(pk)",
         )
         return True
     except ClientError as e:

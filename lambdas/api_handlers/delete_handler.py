@@ -16,7 +16,7 @@ import os
 import boto3
 from flask import Blueprint, request, jsonify
 from auth import require_auth
-from cosmos_client import get_file_by_sha          # read (read model)
+from cosmos_client import get_file_by_sha_global, delete_file_record_cosmos
 from dynamodb_client import delete_file_record      # write (system of record)
 
 delete_bp = Blueprint("delete", __name__)
@@ -51,6 +51,15 @@ def _sha_from_key(key: str) -> str | None:
         return None
 
 
+def _sha_from_presigned(url: str) -> str | None:
+    try:
+        path = url.split("?")[0].split("://", 1)[-1]
+        key = path.split("/", 1)[1]
+        return _sha_from_key(key)
+    except (IndexError, ValueError):
+        return None
+
+
 @delete_bp.route("/files/delete", methods=["POST"])
 @require_auth
 def delete_files():
@@ -62,26 +71,37 @@ def delete_files():
     if not urls or not isinstance(urls, list):
         return jsonify({"error": "'urls' must be a non-empty list"}), 400
 
-    user_id = request.user_id
     deleted = []
     failed = []
 
     for url in urls:
         bucket, key = _parse_s3_url(url)
         if bucket is None:
-            failed.append(url)
-            continue
-
-        sha = _sha_from_key(key)
-        if sha is None:
-            failed.append(url)
-            continue
+            # Presigned https URLs — resolve via global Cosmos lookup.
+            sha = _sha_from_presigned(url)
+            if sha is None:
+                failed.append(url)
+                continue
+            doc = get_file_by_sha_global(sha)
+            if doc is None:
+                failed.append(url)
+                continue
+            s3_url = doc.get("s3_url", "")
+            bucket, key = _parse_s3_url(s3_url)
+            if bucket is None:
+                failed.append(url)
+                continue
+        else:
+            sha = _sha_from_key(key)
+            if sha is None:
+                failed.append(url)
+                continue
+            doc = get_file_by_sha_global(sha)
+            if doc is None:
+                failed.append(url)
+                continue
 
         try:
-            # Confirm the file exists and is owned by this user (read model).
-            doc = get_file_by_sha(sha, user_id)
-            if doc is None:
-                continue  # not found for this user — skip silently
 
             # 1. Delete the original object (image or video) from S3.
             try:
@@ -102,7 +122,8 @@ def delete_files():
 
             # 3. Delete the DynamoDB record (system of record). The Replicator
             #    removes the Cosmos document via the stream REMOVE event.
-            delete_file_record(sha, user_id)
+            delete_file_record(sha)
+            delete_file_record_cosmos(sha, doc["user_id"])
             deleted.append(url)
 
         except Exception:

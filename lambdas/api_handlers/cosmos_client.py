@@ -16,7 +16,7 @@ import os
 
 from azure.cosmos import CosmosClient, exceptions
 
-from species_catalog import resolve_species
+from species_catalog import normalize_tag_key
 
 _client: CosmosClient | None = None
 _container = None
@@ -52,7 +52,7 @@ def _safe_species(name: str) -> str:
     name containing those characters can't break out of the c.tags["..."]
     accessor or alter the query. Counts are always passed as real parameters.
     """
-    canonical = resolve_species(name) or name.strip()
+    canonical = normalize_tag_key(name)
     return canonical.replace("\\", "\\\\").replace('"', '\\"')
 
 
@@ -68,6 +68,32 @@ def get_file_by_sha(sha: str, user_id: str) -> dict | None:
         return ctr.read_item(item=sha, partition_key=user_id)
     except exceptions.CosmosResourceNotFoundError:
         return None
+
+
+def get_file_by_sha_global(sha: str) -> dict | None:
+    """Cross-partition lookup by document id (shared observatory)."""
+    ctr = _get_container()
+    query = "SELECT * FROM c WHERE c.id = @sha"
+    params = [{"name": "@sha", "value": sha}]
+    results = list(
+        ctr.query_items(
+            query=query,
+            parameters=params,
+            enable_cross_partition_query=True,
+        )
+    )
+    return results[0] if results else None
+
+
+def list_all_files() -> list[dict]:
+    """Return every file in the observatory (shared global catalogue)."""
+    ctr = _get_container()
+    return list(
+        ctr.query_items(
+            query="SELECT * FROM c",
+            enable_cross_partition_query=True,
+        )
+    )
 
 
 def _append_tag_clauses(
@@ -166,8 +192,8 @@ def get_file_by_thumbnail_url(thumbnail_url: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def update_file_tags(sha: str, user_id: str, new_tags: dict[str, int]) -> dict | None:
-    """Replace the tags map on a document and bump updated_at."""
+def update_file_tags_cosmos(sha: str, user_id: str, new_tags: dict[str, int]) -> dict | None:
+    """Replace the tags map on a Cosmos document (owner partition)."""
     from datetime import datetime, timezone
 
     ctr = _get_container()
@@ -180,7 +206,7 @@ def update_file_tags(sha: str, user_id: str, new_tags: dict[str, int]) -> dict |
     return ctr.replace_item(item=sha, body=item)
 
 
-def delete_file_record(sha: str, user_id: str) -> bool:
+def delete_file_record_cosmos(sha: str, user_id: str) -> bool:
     """Delete the Cosmos document. Returns True if deleted, False if not found."""
     ctr = _get_container()
     try:
