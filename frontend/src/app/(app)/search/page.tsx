@@ -78,6 +78,9 @@ function SearchView() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SearchResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Progress message for the by-file search (the ML run can take 15-40s on a
+  // cold start). Drives an informative loading state instead of a bare spinner.
+  const [byFileStatus, setByFileStatus] = useState<string | null>(null);
 
   const search = async (e?: React.FormEvent, termArg?: string, modeArg?: SearchMode) => {
     e?.preventDefault();
@@ -118,12 +121,26 @@ function SearchView() {
   const searchByFile = async (file: File) => {
     setLoading(true);
     setError(null);
+    setResults(null);
+
+    // Staged status so the (potentially 15-40s) ML run reads as progress, not a
+    // hang: analysing first, then a warming hint once it's clearly a cold start.
+    setByFileStatus('Uploading image…');
+    const t1 = setTimeout(() => setByFileStatus('Detecting species with AI…'), 700);
+    const t2 = setTimeout(
+      () => setByFileStatus('Still working — the model can take ~30s on first use…'),
+      12000,
+    );
+
     try {
       const res = await api.searchByFile(file);
       setResults(res.results);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      setByFileStatus(null);
       setLoading(false);
     }
   };
@@ -197,9 +214,14 @@ function SearchView() {
 
         {/* Loading */}
         {loading && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px 0' }}>
             <div style={{ width: '32px', height: '32px', border: '3px solid var(--line)', borderTopColor: 'var(--ochre)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            {byFileStatus && (
+              <div role="status" aria-live="polite" style={{ fontSize: '14px', color: 'var(--ink-soft)', textAlign: 'center', maxWidth: '320px' }}>
+                {byFileStatus}
+              </div>
+            )}
           </div>
         )}
 
