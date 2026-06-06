@@ -24,11 +24,11 @@
 
   /* Primary accent — eucalyptus green, matched to the outback/wildlife scene.
      Buttons, links, focus rings, CTAs all resolve through these. */
-  --primary:       oklch(0.640 0.090 158);
-  --primary-deep:  oklch(0.560 0.085 159);
+  --primary:       oklch(0.555 0.088 159);
+  --primary-deep:  oklch(0.480 0.082 160);
   --primary-soft:  oklch(0.300 0.052 157);
   --primary-tint:  oklch(0.225 0.038 157);
-  --primary-light: oklch(0.770 0.075 156);
+  --primary-light: oklch(0.700 0.078 157);
 
   /* Legacy ochre tokens now alias the primary so existing references (47 of
      them across the app) recolour in one place. Prefer --primary going fwd. */
