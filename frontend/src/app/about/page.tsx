@@ -7,6 +7,7 @@ export default function AboutPage() {
   const router = useRouter();
 
   const worldRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
   const curtainLRef = useRef<HTMLDivElement>(null);
   const curtainRRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -17,7 +18,7 @@ export default function AboutPage() {
     const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
     const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(mx, v));
-    const MAG = { world: 6, curtainL: 14, curtainR: 14 };
+    const MAG = { world: 6, portal: 7, curtainL: 14, curtainR: 14 };
 
     let target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
     let entranceStart: number | null = null;
@@ -48,20 +49,23 @@ export default function AboutPage() {
         const s = lerp(1, 1.18, sp);
         worldRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.world}px,${ry * MAG.world}px,0)`;
       }
+      if (portalRef.current) {
+        const s = lerp(1, 7.5, sp);
+        portalRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.portal}px,${ry * MAG.portal}px,0)`;
+        portalRef.current.style.opacity = String(clamp(1 - (sp - 0.65) / 0.2, 0, 1));
+      }
       if (curtainLRef.current && curtainRRef.current) {
         let openAmt = 0;
-        if (entranceStart !== null) openAmt = clamp((performance.now() - entranceStart) / 1600, 0, 1);
+        if (entranceStart !== null) openAmt = clamp((performance.now() - entranceStart) / 1400, 0, 1);
         openAmt = easeInOut(openAmt);
-        const entranceShift = openAmt * 42;
-        const part = easeInOut(clamp(sp / 0.58, 0, 1));
-        const shift = entranceShift + part * (138 - entranceShift);
-        const cs = lerp(1.08, 1.32, part);
+        const shift = openAmt * 62 + e * (150 - 62);
+        const cs = lerp(1, 1.3, e);
         curtainLRef.current.style.transform = `translateX(calc(-${shift}% + ${rx * MAG.curtainL}px)) translateY(${ry * MAG.curtainL * 0.3}px) scale(${cs}) translateZ(0)`;
         curtainRRef.current.style.transform = `translateX(calc(${shift}% + ${rx * MAG.curtainR}px)) translateY(${ry * MAG.curtainR * 0.3}px) scale(${cs}) translateZ(0)`;
       }
       if (heroRef.current) {
-        heroRef.current.style.opacity = String(clamp(1 - (sp - 0.34) / 0.16, 0, 1));
-        heroRef.current.style.pointerEvents = sp < 0.34 ? 'auto' : 'none';
+        heroRef.current.style.opacity = String(clamp(1 - sp / 0.22, 0, 1));
+        heroRef.current.style.pointerEvents = sp < 0.2 ? 'auto' : 'none';
       }
       if (scene2Ref.current) {
         const s2 = clamp((sp - 0.68) / 0.16, 0, 1);
@@ -95,7 +99,7 @@ export default function AboutPage() {
         nav { opacity: 0; transition: opacity .9s ease .6s; }
         .hero-inner { opacity: 0; transform: translateY(20px); }
         @keyframes bobUp { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
-        @keyframes ctaPulse { 0%,100%{box-shadow:0 6px 24px oklch(0.5 0.10 158 / 0.4),0 0 0 0 oklch(0.64 0.09 158 / 0.5);} 50%{box-shadow:0 6px 24px oklch(0.5 0.10 158 / 0.4),0 0 0 10px oklch(0.64 0.09 158 / 0);} }
+        @keyframes ctaPulse { 0%,100%{box-shadow:0 6px 24px oklch(0.55 0.13 46 / 0.4),0 0 0 0 oklch(0.69 0.135 56 / 0.5);} 50%{box-shadow:0 6px 24px oklch(0.55 0.13 46 / 0.4),0 0 0 10px oklch(0.69 0.135 56 / 0);} }
         @keyframes s2Rise { from{opacity:0;transform:translateY(26px);} to{opacity:1;transform:translateY(0);} }
         .scene2.in .s2-eyebrow { animation: s2Rise .7s cubic-bezier(.2,.8,.2,1) both .05s; }
         .scene2.in h2 { animation: s2Rise .8s cubic-bezier(.2,.8,.2,1) both .15s; }
@@ -104,29 +108,32 @@ export default function AboutPage() {
         .scene2.in .s2-btn-2 { animation: s2Rise .7s cubic-bezier(.2,.8,.2,1) both .52s; }
         .cta-primary { animation: ctaPulse 2.6s ease-out infinite; }
         .cta-primary:hover { animation-play-state: paused; }
-        .hero-cta { position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;font-family:var(--font-body);font-size:12.5px;letter-spacing:0.12em;text-transform:uppercase;background:var(--ochre);color:#fff;border:none;padding:14px 26px;border-radius:999px;cursor:pointer;box-shadow:0 6px 24px oklch(0.5 0.10 158 / 0.4);transition:background .25s,transform .2s cubic-bezier(.2,.8,.2,1),box-shadow .25s; }
-        .hero-cta:hover { background:var(--ochre-deep);transform:translateY(-2px);box-shadow:0 12px 34px oklch(0.5 0.10 158 / 0.5); }
+        .hero-cta { position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;font-family:var(--font-body);font-size:12.5px;letter-spacing:0.12em;text-transform:uppercase;background:var(--ochre);color:#fff;border:none;padding:14px 26px;border-radius:999px;cursor:pointer;box-shadow:0 6px 24px oklch(0.55 0.13 46 / 0.4);transition:background .25s,transform .2s cubic-bezier(.2,.8,.2,1),box-shadow .25s; }
+        .hero-cta:hover { background:var(--ochre-deep);transform:translateY(-2px);box-shadow:0 12px 34px oklch(0.55 0.13 46 / 0.5); }
         .hero-cta::before { content:'';position:absolute;top:0;left:-130%;width:55%;height:100%;background:linear-gradient(100deg,transparent,oklch(1 0 0 / 0.45),transparent);transform:skewX(-18deg);transition:left .6s cubic-bezier(.2,.8,.2,1); }
         .hero-cta:hover::before { left:150%; }
         #page-exit { position:fixed;inset:0;z-index:300;background:#0a0608;opacity:0;pointer-events:none;transition:opacity .5s ease; }
       `}</style>
 
-      <div style={{ height: '320vh', position: 'relative' }}>
+      <div style={{ height: '480vh', position: 'relative' }}>
         <div style={{ position: 'sticky', top: 0, height: '100vh', width: '100%', overflow: 'hidden', background: '#0a0608' }}>
 
-          {/* World layer — static outback panorama */}
-          <div ref={worldRef} style={{ position: 'absolute', inset: 0, willChange: 'transform', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 1, transformOrigin: 'center center', backgroundImage: `url('/outback-scroll/background.png'), radial-gradient(130% 100% at 50% 18%, oklch(0.34 0.055 62) 0%, oklch(0.15 0.03 52) 46%, oklch(0.075 0.018 48) 78%)` }} />
+          {/* World layer */}
+          <div ref={worldRef} style={{ position: 'absolute', inset: 0, willChange: 'transform', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 1, transformOrigin: 'center center', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779975077/world_bg_jzzcn1.jpg'), radial-gradient(130% 100% at 50% 18%, oklch(0.34 0.055 62) 0%, oklch(0.15 0.03 52) 46%, oklch(0.075 0.018 48) 78%)` }} />
 
-          {/* Left curtain — eucalyptus tree */}
-          <div ref={curtainLRef} style={{ position: 'absolute', top: '-8%', bottom: '-8%', width: '64%', left: '-2%', zIndex: 20, willChange: 'transform', transformOrigin: 'left bottom', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
+          {/* Portal layer */}
+          <div ref={portalRef} style={{ position: 'absolute', inset: 0, willChange: 'transform,opacity', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 2, transformOrigin: '52% 38%', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779974947/portal_bg_mu60k9.png'), radial-gradient(closest-side at 52% 40%, oklch(0.62 0.13 64 / 0.55) 0%, oklch(0.40 0.10 56 / 0.35) 34%, transparent 64%)` }} />
 
-          {/* Right curtain — eucalyptus tree */}
-          <div ref={curtainRRef} style={{ position: 'absolute', top: '-8%', bottom: '-8%', width: '64%', right: '-2%', zIndex: 20, willChange: 'transform', transformOrigin: 'right bottom', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
+          {/* Left curtain */}
+          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', left: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779975070/curtain_left_cdht6q.png'), linear-gradient(96deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
+
+          {/* Right curtain */}
+          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', right: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779975071/curtain_right_a9bn3i.png'), linear-gradient(264deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
 
           {/* Vignette */}
           <div style={{ position: 'absolute', inset: 0, zIndex: 4, pointerEvents: 'none', background: 'radial-gradient(120% 100% at 50% 42%, transparent 52%, oklch(0.04 0.02 50 / 0.55) 100%), linear-gradient(180deg, oklch(0.05 0.02 50 / 0.45) 0%, transparent 22%, transparent 70%, oklch(0.045 0.02 50 / 0.7) 100%)' }} />
 
-          {/* Nav — logo links home */}
+          {/* Nav */}
           <nav style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '22px 48px' }}>
             <button onClick={() => navTo('/')} aria-label="Aussie EcoLens — home" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid oklch(1 0 0 / 0.35)', display: 'grid', placeItems: 'center', background: 'transparent', cursor: 'pointer' }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.4"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" strokeLinecap="round"/></svg>
