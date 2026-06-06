@@ -55,15 +55,17 @@ export default function LandingPage() {
         worldRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.world}px,${ry * MAG.world}px,0)`;
       }
       if (curtainLRef.current && curtainRRef.current) {
-        // Trees start nearly closed over the centred hero text (small entrance
-        // settle), then part as you scroll — revealing the text as they move.
+        // On load the trees animate outward (entrance) to frame and reveal the
+        // centred hero text — so focus lands on the text, not the trees. Scroll
+        // then carries them the rest of the way off-screen.
         let openAmt = 0;
-        if (entranceStart !== null) openAmt = clamp((performance.now() - entranceStart) / 1400, 0, 1);
+        if (entranceStart !== null) openAmt = clamp((performance.now() - entranceStart) / 1600, 0, 1);
         openAmt = easeInOut(openAmt);
+        const entranceShift = openAmt * 42; // trees part ~42% on load to open the centre
         // Part completes by ~58% scroll (just after the text fades) so the
         // back half is free for the scene-2 transition — no long sideways crawl.
         const part = easeInOut(clamp(sp / 0.58, 0, 1));
-        const shift = openAmt * 6 + part * (135 - 6);
+        const shift = entranceShift + part * (138 - entranceShift);
         const cs = lerp(1.08, 1.32, part);
         curtainLRef.current.style.transform = `translateX(calc(-${shift}% + ${rx * MAG.curtainL}px)) translateY(${ry * MAG.curtainL * 0.3}px) scale(${cs}) translateZ(0)`;
         curtainRRef.current.style.transform = `translateX(calc(${shift}% + ${rx * MAG.curtainR}px)) translateY(${ry * MAG.curtainR * 0.3}px) scale(${cs}) translateZ(0)`;
