@@ -23,6 +23,7 @@ def _format_result(doc: dict) -> dict:
         "url":           presign_s3_uri(doc.get("s3_url")),
         "thumbnail_url": presign_s3_uri(doc.get("thumbnail_url")),
         "tags":          doc.get("tags", {}),
+        "uploaded_at":   doc.get("uploaded_at"),
     }
 
 
