@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import AuthVideo from '@/components/auth/AuthVideo';
+import OutbackBackground from '@/components/auth/OutbackBackground';
 import { useAuthFocus } from '@/components/auth/useAuthFocus';
 
 export default function LoginPage() {
@@ -40,7 +40,7 @@ export default function LoginPage() {
 
   return (
     <main className={`auth${focused ? ' auth--focused' : ''}`}>
-      <AuthVideo />
+      <OutbackBackground />
       <div className="auth-bg-veil" />
 
       {/* Left — visual */}
