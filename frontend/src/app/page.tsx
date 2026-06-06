@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import OutbackBackground from '@/components/auth/OutbackBackground';
 
 export default function LandingPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -126,17 +127,19 @@ export default function LandingPage() {
       <div style={{ height: '480vh', position: 'relative' }}>
         <div style={{ position: 'sticky', top: 0, height: '100vh', width: '100%', overflow: 'hidden', background: '#0a0608' }}>
 
-          {/* World layer */}
-          <div ref={worldRef} style={{ position: 'absolute', inset: 0, willChange: 'transform', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 1, transformOrigin: 'center center', backgroundImage: `url('/outback-scroll/backplate.webp'), radial-gradient(130% 100% at 50% 18%, oklch(0.34 0.055 62) 0%, oklch(0.15 0.03 52) 46%, oklch(0.075 0.018 48) 78%)` }} />
+          {/* World layer — interactive outback parallax background */}
+          <div ref={worldRef} style={{ position: 'absolute', inset: 0, willChange: 'transform', zIndex: 1, transformOrigin: 'center center' }}>
+            <OutbackBackground scrollStrength={0.4} />
+          </div>
 
           {/* Portal layer */}
-          <div ref={portalRef} style={{ position: 'absolute', inset: 0, willChange: 'transform,opacity', backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 2, transformOrigin: '52% 38%', backgroundImage: `url('/outback-scroll/layer-uluru.webp'), radial-gradient(closest-side at 52% 40%, oklch(0.62 0.13 64 / 0.55) 0%, oklch(0.40 0.10 56 / 0.35) 34%, transparent 64%)` }} />
+          <div ref={portalRef} style={{ position: 'absolute', inset: 0, willChange: 'transform,opacity', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 2, transformOrigin: '52% 38%', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779974947/portal_bg_mu60k9.png'), radial-gradient(closest-side at 52% 40%, oklch(0.62 0.13 64 / 0.55) 0%, oklch(0.40 0.10 56 / 0.35) 34%, transparent 64%)` }} />
 
           {/* Left curtain */}
-          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', left: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'cover, cover', backgroundPosition: 'left bottom, center', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/layer-left-trees.webp'), linear-gradient(96deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
+          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', left: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779975070/curtain_left_cdht6q.png'), linear-gradient(96deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
 
           {/* Right curtain */}
-          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', right: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'cover, cover', backgroundPosition: 'right bottom, center', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/layer-right-trees.webp'), linear-gradient(264deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
+          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', right: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779975071/curtain_right_a9bn3i.png'), linear-gradient(264deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
 
           {/* Vignette */}
           <div style={{ position: 'absolute', inset: 0, zIndex: 4, pointerEvents: 'none', background: 'radial-gradient(120% 100% at 50% 42%, transparent 52%, oklch(0.04 0.02 50 / 0.55) 100%), linear-gradient(180deg, oklch(0.05 0.02 50 / 0.45) 0%, transparent 22%, transparent 70%, oklch(0.045 0.02 50 / 0.7) 100%)' }} />
