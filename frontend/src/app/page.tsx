@@ -46,6 +46,7 @@ export default function LandingPage() {
           </span>
         </Link>
         <div className="lp-nav-actions">
+          <Link href="/about" className="lp-nav-link">About</Link>
           <Link href="/login" className="btn btn-ghost btn-sm">Sign in</Link>
           <Link href="/signup" className="btn btn-primary btn-sm">Request access</Link>
         </div>
