@@ -492,7 +492,7 @@ button { font-family: inherit; cursor: pointer; }
 @media (min-width: 1100px) { .lp-hero-actions { justify-content: flex-start; } }
 
 /* Feature sections */
-.lp-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1240px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 56px) clamp(40px, 6vh, 72px); }
+.lp-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1240px; margin: 0 auto; padding: clamp(48px, 7vh, 88px) clamp(20px, 5vw, 56px) clamp(40px, 6vh, 72px); }
 .lp-feature { padding: 28px 26px; }
 .lp-feature-num { font-family: var(--font-mono); font-size: 13px; color: var(--primary); letter-spacing: 0.1em; }
 .lp-feature h3 { font-size: 19px; margin: 14px 0 0; color: var(--ink); }
