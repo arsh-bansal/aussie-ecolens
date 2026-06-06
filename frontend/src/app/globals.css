@@ -49,7 +49,7 @@
 
   /* Eyebrow / kicker accent — the small uppercase label above headings.
      A named palette role; retune here to recolour every eyebrow at once. */
-  --eyebrow:   var(--gold);
+  --eyebrow:   var(--clay);
   --sky:       oklch(0.715 0.090 232);
   --sky-soft:  oklch(0.270 0.052 235);
 
