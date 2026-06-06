@@ -55,17 +55,21 @@ export default function LandingPage() {
         worldRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.world}px,${ry * MAG.world}px,0)`;
       }
       if (curtainLRef.current && curtainRRef.current) {
+        // Trees start nearly closed over the centred hero text (small entrance
+        // settle), then part as you scroll — revealing the text as they move.
         let openAmt = 0;
         if (entranceStart !== null) openAmt = clamp((performance.now() - entranceStart) / 1400, 0, 1);
         openAmt = easeInOut(openAmt);
-        const shift = openAmt * 62 + e * (150 - 62);
+        const shift = openAmt * 8 + e * (150 - 8);
         const cs = lerp(1, 1.3, e);
         curtainLRef.current.style.transform = `translateX(calc(-${shift}% + ${rx * MAG.curtainL}px)) translateY(${ry * MAG.curtainL * 0.3}px) scale(${cs}) translateZ(0)`;
         curtainRRef.current.style.transform = `translateX(calc(${shift}% + ${rx * MAG.curtainR}px)) translateY(${ry * MAG.curtainR * 0.3}px) scale(${cs}) translateZ(0)`;
       }
       if (heroRef.current) {
-        heroRef.current.style.opacity = String(clamp(1 - sp / 0.22, 0, 1));
-        heroRef.current.style.pointerEvents = sp < 0.2 ? 'auto' : 'none';
+        // Keep the text fully visible while the trees part, then fade it as the
+        // scene transitions to scene 2.
+        heroRef.current.style.opacity = String(clamp(1 - (sp - 0.34) / 0.16, 0, 1));
+        heroRef.current.style.pointerEvents = sp < 0.34 ? 'auto' : 'none';
       }
       if (scene2Ref.current) {
         const s2 = clamp((sp - 0.68) / 0.16, 0, 1);
@@ -123,11 +127,11 @@ export default function LandingPage() {
           {/* World layer — static outback panorama */}
           <div ref={worldRef} style={{ position: 'absolute', inset: 0, willChange: 'transform', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 1, transformOrigin: 'center center', backgroundImage: `url('/outback-scroll/background.png'), radial-gradient(130% 100% at 50% 18%, oklch(0.34 0.055 62) 0%, oklch(0.15 0.03 52) 46%, oklch(0.075 0.018 48) 78%)` }} />
 
-          {/* Left curtain — eucalyptus tree */}
-          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', left: '4%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
+          {/* Left curtain — eucalyptus tree (above the hero text so it reveals on part) */}
+          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', left: '4%', zIndex: 20, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
 
-          {/* Right curtain — eucalyptus tree */}
-          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', right: '4%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
+          {/* Right curtain — eucalyptus tree (above the hero text so it reveals on part) */}
+          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', right: '4%', zIndex: 20, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
 
           {/* Vignette */}
           <div style={{ position: 'absolute', inset: 0, zIndex: 4, pointerEvents: 'none', background: 'radial-gradient(120% 100% at 50% 42%, transparent 52%, oklch(0.04 0.02 50 / 0.55) 100%), linear-gradient(180deg, oklch(0.05 0.02 50 / 0.45) 0%, transparent 22%, transparent 70%, oklch(0.045 0.02 50 / 0.7) 100%)' }} />
@@ -142,12 +146,12 @@ export default function LandingPage() {
           {/* Hero */}
           <div ref={heroRef} style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
             <div className="hero-inner" style={{ position: 'absolute', inset: 0 }}>
-              <div style={{ position: 'absolute', top: '46%', left: '60px', transform: 'translateY(-50%)', maxWidth: '440px' }}>
+              <div style={{ position: 'absolute', top: '44%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px, calc(100vw - 48px))', textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'oklch(0.810 0.118 84)' }}>AI Wildlife Observatory</div>
                 <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'clamp(46px,6vw,86px)', lineHeight: 0.98, letterSpacing: '0.01em', margin: '18px 0 0', textShadow: '0 4px 40px oklch(0.05 0.02 50 / 0.6)', color: '#fff' }}>
                   STEP<span style={{ color: 'var(--ochre)', padding: '0 .12em' }}>›</span>INTO THE WILD
                 </h1>
-                <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'oklch(0.94 0.01 80 / 0.82)', marginTop: '20px', maxWidth: '400px' }}>
+                <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'oklch(0.94 0.01 80 / 0.82)', margin: '20px auto 0', maxWidth: '420px' }}>
                   AI eyes on the Australian bush. MegaDetector finds every creature; SpeciesNet names it. Scroll to cross the threshold.
                 </p>
               </div>
