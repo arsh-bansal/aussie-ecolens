@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,43 +26,9 @@ export default function LandingPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
-  const bgRef = useRef<HTMLImageElement>(null);
-  const treeLRef = useRef<HTMLImageElement>(null);
-  const treeRRef = useRef<HTMLImageElement>(null);
-  // Uluru is intentionally NOT in the parallax — it stays pinned as the distant
-  // landmark, so the depth illusion holds while nearer layers drift.
-
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.replace('/dashboard');
   }, [isAuthenticated, isLoading, router]);
-
-  // Pointer parallax: foreground trees move most, the panorama drifts subtly.
-  useEffect(() => {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) return;
-    const target = { x: 0, y: 0 };
-    const cur = { x: 0, y: 0 };
-    let raf = 0;
-
-    const onMove = (e: PointerEvent) => {
-      target.x = (e.clientX / Math.max(window.innerWidth, 1)) * 2 - 1;
-      target.y = (e.clientY / Math.max(window.innerHeight, 1)) * 2 - 1;
-    };
-    const tick = () => {
-      cur.x += (target.x - cur.x) * 0.06;
-      cur.y += (target.y - cur.y) * 0.06;
-      if (bgRef.current) bgRef.current.style.transform = `scale(1.06) translate3d(${cur.x * -8}px, ${cur.y * -5}px, 0)`;
-      if (treeLRef.current) treeLRef.current.style.transform = `translate3d(${cur.x * -26}px, ${cur.y * -10}px, 0)`;
-      if (treeRRef.current) treeRRef.current.style.transform = `translate3d(${cur.x * 26}px, ${cur.y * -10}px, 0)`;
-      raf = requestAnimationFrame(tick);
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('pointermove', onMove);
-    };
-  }, []);
 
   if (isLoading) return null;
 
@@ -89,14 +55,7 @@ export default function LandingPage() {
       <header className="lp-hero">
         <div className="lp-hero-bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img ref={bgRef} src="/outback-scroll/background.png" alt="" className="lp-hero-img" />
-          {/* Uluru — pinned distant landmark, deliberately outside the parallax */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/outback-scroll/uluru-cutout.png" alt="" className="lp-hero-uluru" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img ref={treeLRef} src="/outback-scroll/euc-left.webp" alt="" className="lp-hero-tree lp-hero-tree--l" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img ref={treeRRef} src="/outback-scroll/euc-right.webp" alt="" className="lp-hero-tree lp-hero-tree--r" />
+          <img src="/hero-wallaby.jpg" alt="" className="lp-hero-img" />
           <div className="lp-hero-scrim" />
         </div>
         <div className="lp-hero-copy">
