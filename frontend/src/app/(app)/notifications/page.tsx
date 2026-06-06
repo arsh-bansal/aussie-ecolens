@@ -29,7 +29,12 @@ export default function NotificationsPage() {
       setSubscribed(prev => new Set([...prev, tag]));
       toast.success(`Subscribed to "${tag}" alerts via SNS.`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Subscription failed');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('404') || msg.includes('Not Found')) {
+        toast.warning('SNS subscribe endpoint not yet deployed — coming soon.');
+      } else {
+        toast.error(msg || 'Subscription failed');
+      }
     } finally {
       setLoading(null);
     }
@@ -53,11 +58,9 @@ export default function NotificationsPage() {
 
       <div className="page">
         {/* Stats */}
-        <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        <div className="stat-grid" style={{ gridTemplateColumns: '200px' }}>
           {[
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/></svg>, icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' }, val: String(subscribed.size), label: 'Active subscriptions' },
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>, icoStyle: { background: 'var(--ochre-tint)', color: 'var(--ochre)' }, val: '—', label: 'Emails sent (30d)' },
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>, icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' }, val: '—', label: 'Triggered today' },
+            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/></svg>, icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' }, val: String(subscribed.size), label: 'Active this session' },
           ].map(s => (
             <div key={s.label} className="stat">
               <div className="stat-ico" style={s.icoStyle}>{s.icon}</div>

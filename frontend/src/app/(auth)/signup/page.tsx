@@ -15,7 +15,12 @@ export default function SignupPage() {
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const strength = form.password.length >= 10 && /[0-9]/.test(form.password) && /[!@#$%^&*]/.test(form.password) ? 3 : form.password.length >= 8 ? 2 : form.password.length >= 4 ? 1 : 0;
+  const pwHasUpper = /[A-Z]/.test(form.password);
+  const pwHasNumber = /[0-9]/.test(form.password);
+  const pwHasSpecial = /[!@#$%^&*]/.test(form.password);
+  const pwLongEnough = form.password.length >= 8;
+  const pwValid = pwLongEnough && pwHasUpper && pwHasNumber;
+  const strength = pwValid && pwHasSpecial && form.password.length >= 10 ? 3 : pwValid ? 2 : pwLongEnough ? 1 : form.password.length >= 4 ? 1 : 0;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
