@@ -55,7 +55,7 @@ function ResultCard({
       <div style={{ position: 'relative', height: '158px', overflow: 'hidden', background: 'var(--sand-200)' }}>
         {r.thumbnail_url
           // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={r.thumbnail_url} alt={species} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <img src={r.thumbnail_url} alt={species} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" strokeWidth="1.4"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 3-3 6 5"/></svg>
             </div>
@@ -99,6 +99,7 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<SearchResult | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const resetResults = () => {
@@ -121,13 +122,12 @@ export default function SearchPage() {
     setFullImageUrl(null);
     setResults(null);
     try {
+      const terms = query.split(',').map(s => s.trim()).filter(Boolean);
       if (mode === 'species') {
-        const res = await api.searchBySpecies({ species: query.split(',').map(s => s.trim()).filter(Boolean) });
+        const res = await api.searchBySpecies({ species: terms });
         setResults(res.results);
       } else if (mode === 'tags') {
-        const tagMap = Object.fromEntries(
-          query.split(',').map(s => s.trim()).filter(Boolean).map(t => [t, 1])
-        );
+        const tagMap = Object.fromEntries(terms.map(t => [t, 1]));
         const res = await api.searchByTags({ tags: tagMap });
         setResults(res.results);
       } else if (mode === 'thumbnail') {
@@ -197,15 +197,31 @@ export default function SearchPage() {
             </div>
 
             {mode === 'file' ? (
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => fileRef.current?.click()}
-                  style={{ flex: 1 }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 3-3 6 5"/></svg>
-                  {loading ? 'Searching…' : 'Drop or select an image to find similar detections'}
-                </button>
+              <div
+                style={{
+                  border: `2px dashed ${dragOver ? 'var(--ochre)' : 'var(--line)'}`,
+                  borderRadius: 'var(--r-lg)',
+                  background: dragOver ? 'var(--ochre-tint)' : 'var(--sand-50)',
+                  padding: '28px 20px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'border-color .15s, background .15s',
+                }}
+                onClick={() => !loading && fileRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files[0];
+                  if (f && f.type.startsWith('image/')) searchByFile(f);
+                }}
+              >
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={dragOver ? 'var(--ochre)' : 'var(--ink-faint)'} strokeWidth="1.5" style={{ margin: '0 auto 10px', display: 'block' }}><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 3-3 6 5"/></svg>
+                <p style={{ margin: 0, fontSize: '14.5px', color: dragOver ? 'var(--ochre)' : 'var(--ink-soft)', fontWeight: dragOver ? 700 : 400 }}>
+                  {loading ? 'Searching…' : dragOver ? 'Release to search' : 'Drop an image here, or click to browse'}
+                </p>
+                <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--ink-faint)' }}>JPG, PNG, WEBP · finds similar detections in the observatory</p>
                 <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) searchByFile(e.target.files[0]); }} />
               </div>
             ) : (

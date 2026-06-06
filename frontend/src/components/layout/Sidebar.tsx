@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-const NAV = [
+const NAV: { href: string; label: string; icon: React.ReactNode; count?: number }[] = [
   {
     href: '/dashboard', label: 'Dashboard',
     icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>,
@@ -23,7 +23,7 @@ const NAV = [
     icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>,
   },
   {
-    href: '/notifications', label: 'Alerts', count: 3,
+    href: '/notifications', label: 'Alerts',
     icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0" strokeLinecap="round"/></svg>,
   },
 ];
@@ -72,10 +72,10 @@ export default function Sidebar() {
 
       <div className={`sb-foot${open ? ' open' : ''}`}>
         <div className="sb-menu">
-          <a href="#">
+          <Link href="/profile">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6 8-6s8 2 8 6" strokeLinecap="round"/></svg>
             Profile
-          </a>
+          </Link>
           <div className="sb-sep" />
           <a className="danger" href="#" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 17l5-5-5-5M20 12H9M9 4H6a2 2 0 00-2 2v12a2 2 0 002 2h3" strokeLinecap="round" strokeLinejoin="round"/></svg>
