@@ -60,8 +60,11 @@ export default function LandingPage() {
         let openAmt = 0;
         if (entranceStart !== null) openAmt = clamp((performance.now() - entranceStart) / 1400, 0, 1);
         openAmt = easeInOut(openAmt);
-        const shift = openAmt * 8 + e * (150 - 8);
-        const cs = lerp(1, 1.3, e);
+        // Part completes by ~58% scroll (just after the text fades) so the
+        // back half is free for the scene-2 transition — no long sideways crawl.
+        const part = easeInOut(clamp(sp / 0.58, 0, 1));
+        const shift = openAmt * 6 + part * (135 - 6);
+        const cs = lerp(1.08, 1.32, part);
         curtainLRef.current.style.transform = `translateX(calc(-${shift}% + ${rx * MAG.curtainL}px)) translateY(${ry * MAG.curtainL * 0.3}px) scale(${cs}) translateZ(0)`;
         curtainRRef.current.style.transform = `translateX(calc(${shift}% + ${rx * MAG.curtainR}px)) translateY(${ry * MAG.curtainR * 0.3}px) scale(${cs}) translateZ(0)`;
       }
@@ -121,17 +124,17 @@ export default function LandingPage() {
         #page-exit { position:fixed;inset:0;z-index:300;background:#0a0608;opacity:0;pointer-events:none;transition:opacity .5s ease; }
       `}</style>
 
-      <div style={{ height: '480vh', position: 'relative' }}>
+      <div style={{ height: '320vh', position: 'relative' }}>
         <div style={{ position: 'sticky', top: 0, height: '100vh', width: '100%', overflow: 'hidden', background: '#0a0608' }}>
 
           {/* World layer — static outback panorama */}
           <div ref={worldRef} style={{ position: 'absolute', inset: 0, willChange: 'transform', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 1, transformOrigin: 'center center', backgroundImage: `url('/outback-scroll/background.png'), radial-gradient(130% 100% at 50% 18%, oklch(0.34 0.055 62) 0%, oklch(0.15 0.03 52) 46%, oklch(0.075 0.018 48) 78%)` }} />
 
           {/* Left curtain — eucalyptus tree (above the hero text so it reveals on part) */}
-          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', left: '4%', zIndex: 20, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
+          <div ref={curtainLRef} style={{ position: 'absolute', top: '-8%', bottom: '-8%', width: '64%', left: '-2%', zIndex: 20, willChange: 'transform', transformOrigin: 'left bottom', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
 
           {/* Right curtain — eucalyptus tree (above the hero text so it reveals on part) */}
-          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', right: '4%', zIndex: 20, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
+          <div ref={curtainRRef} style={{ position: 'absolute', top: '-8%', bottom: '-8%', width: '64%', right: '-2%', zIndex: 20, willChange: 'transform', transformOrigin: 'right bottom', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
 
           {/* Vignette */}
           <div style={{ position: 'absolute', inset: 0, zIndex: 4, pointerEvents: 'none', background: 'radial-gradient(120% 100% at 50% 42%, transparent 52%, oklch(0.04 0.02 50 / 0.55) 100%), linear-gradient(180deg, oklch(0.05 0.02 50 / 0.45) 0%, transparent 22%, transparent 70%, oklch(0.045 0.02 50 / 0.7) 100%)' }} />
