@@ -217,11 +217,11 @@ button { font-family: inherit; cursor: pointer; }
 .sb-user-role { font-size: 11px; color: var(--cream-soft); }
 
 /* ---------- Content ---------- */
-.content { flex: 1; min-width: 0; background: var(--sand-100); }
+.content { flex: 1; min-width: 0; background: transparent; }
 .topbar {
   display: flex; align-items: center; gap: 18px;
   padding: 20px 34px; border-bottom: 1px solid var(--line);
-  background: oklch(0.088 0.010 42 / 0.82); backdrop-filter: blur(10px);
+  background: oklch(0.088 0.010 42 / 0.72); backdrop-filter: blur(16px);
   position: sticky; top: 0; z-index: 20;
 }
 .page-title { font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1; }
@@ -245,7 +245,7 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- Stat tiles ---------- */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .stat {
-  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: oklch(0.150 0.012 44 / 0.82); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: var(--r-lg);
   padding: 20px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden;
 }
 .stat-ico { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; margin-bottom: 14px; }
@@ -256,7 +256,7 @@ button { font-family: inherit; cursor: pointer; }
 .trend-down { color: var(--clay); }
 
 /* ---------- Generic panel ---------- */
-.panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); }
+.panel { background: oklch(0.150 0.012 44 / 0.82); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); }
 .panel-head { display: flex; align-items: center; gap: 14px; padding: 18px 22px; border-bottom: 1px solid var(--line-soft); }
 .panel-head h3 { font-size: 15.5px; font-weight: 700; }
 .panel-head .panel-link { margin-left: auto; font-size: 13px; font-weight: 400; letter-spacing: 0.04em; color: var(--ochre); display: inline-flex; align-items: center; gap: 5px; }
