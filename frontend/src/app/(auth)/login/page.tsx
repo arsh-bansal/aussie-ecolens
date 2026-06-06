@@ -46,7 +46,7 @@ export default function LoginPage() {
       {/* Left — visual */}
       <section className="auth-visual">
         <div className="visual-inner">
-          <div className="auth-brand">
+          <Link href="/" className="auth-brand auth-brand--link" aria-label="Aussie EcoLens — home">
             <span className="auth-mark">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" strokeLinecap="round"/></svg>
             </span>
@@ -54,7 +54,7 @@ export default function LoginPage() {
               <div className="auth-brand-name">Aussie EcoLens</div>
               <div className="auth-brand-sub">Wildlife Observatory</div>
             </div>
-          </div>
+          </Link>
           <div className="visual-quote">
             <div className="eyebrow">AI-powered field intelligence</div>
             <h2>See every creature the bush keeps hidden.</h2>
