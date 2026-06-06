@@ -114,4 +114,71 @@ class TestEdgeCases:
             "detail": {"bucket": {"name": "eb"}, "object": {"key": "u/eb.JPG"}}
         }
         assert extract(event) == [("eb", "u/eb.JPG")]
+
+
+@pytest.fixture
+def handler_mod(monkeypatch):
+    """Import the handler MODULE with model-loading singletons faked out, so the
+    pure query-temp guard can be exercised without real models, S3, or DynamoDB.
+    """
+    from PIL import Image
+
+    class _FakeMD:
+        def __init__(self, *a, **k):
+            pass
+
+        def detect(self, image_path):
+            return []
+
+    class _FakeSN:
+        def __init__(self, *a, **k):
+            pass
+
+        def classify(self, crop):
+            return None
+
+    class _FakeS3:
+        def __init__(self, *a, **k):
+            pass
+
+        def download(self, bucket, key, dest):
+            Image.new("RGB", (8, 8)).save(dest, format="JPEG")
+            return 1
+
+        def decode_image(self, path):
+            return Image.open(path).convert("RGB")
+
+    monkeypatch.setattr(
+        "aussie_ecolens_tagger.services.megadetector.MegaDetectorService", _FakeMD
+    )
+    monkeypatch.setattr(
+        "aussie_ecolens_tagger.services.speciesnet.SpeciesNetService", _FakeSN
+    )
+    monkeypatch.setattr("aussie_ecolens_tagger.services.s3.S3Service", _FakeS3)
+    monkeypatch.setenv("LOAD_MODELS_FROM_S3", "false")
+
+    import aussie_ecolens_tagger.handler as mod
+
+    return mod
+
+
+class TestQueryTempGuard:
+    """Transient search-by-image uploads (key prefix ``query-temp/``) must be
+    skipped by the tagger. The query handler deletes that photo from S3 the
+    moment tagging returns, so persisting a FILE#<sha> record for it leaves an
+    orphan that 404s (NoSuchKey) when opened from search results — and violates
+    assignment 4.3 (query files are not stored).
+    """
+
+    def test_predicate_matches_query_temp_prefix(self, handler_mod) -> None:
+        assert handler_mod._is_query_temp_key("query-temp/abc123.jpg") is True
+
+    def test_predicate_rejects_normal_upload_key(self, handler_mod) -> None:
+        # Real uploads are keyed <cognito-sub>/<sha>.<ext> — never query-temp/.
+        assert handler_mod._is_query_temp_key("user-1/abc123.JPG") is False
+
+    def test_process_one_skips_query_temp_without_io(self, handler_mod) -> None:
+        # Short-circuits before any S3 download or DynamoDB write.
+        out = handler_mod._process_one("uploads", "query-temp/deadbeef.jpg")
+        assert out == {"s3_key": "query-temp/deadbeef.jpg", "skipped": "query-temp"}
     
