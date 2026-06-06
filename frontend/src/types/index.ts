@@ -24,6 +24,7 @@ export interface SearchResult {
   thumbnail_url?: string;
   url: string;
   tags: Record<string, number>;
+  uploaded_at?: string;
 }
 
 export interface SearchResponse {

@@ -1,42 +1,147 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
+import type { SearchResult } from '@/types';
 
-const STATS = [
-  { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></svg>, icoStyle: { background: 'var(--ochre-tint)', color: 'var(--ochre-deep)' }, val: '8,412', label: 'Detections this week', trend: '▲ 12.4% vs last week', trendUp: true },
-  { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3c4 4 6 7 6 10a6 6 0 01-12 0c0-3 2-6 6-10z"/></svg>, icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc-deep)' }, val: '147', label: 'Distinct species', trend: '▲ 6 new this month', trendUp: true },
-  { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>, icoStyle: { background: 'var(--gold-soft)', color: 'var(--gold)' }, val: '38', label: 'Awaiting review', trend: 'low-confidence tags', trendUp: false },
-  { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 6l3 14h12l3-14"/><path d="M3 6h18M8 6V4h8v2"/></svg>, icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' }, val: '21', label: 'Invasive sightings', trend: '▲ foxes near Wilsons Prom', trendUp: false },
-];
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const BARS = [
-  { day: 'Wed', h: '46%', peak: false },
-  { day: 'Thu', h: '62%', peak: false },
-  { day: 'Fri', h: '54%', peak: false },
-  { day: 'Sat', h: '78%', peak: false },
-  { day: 'Sun', h: '100%', peak: true },
-  { day: 'Mon', h: '71%', peak: false },
-  { day: 'Tue', h: '58%', peak: false },
-];
+function topTag(record: SearchResult): [string, number] {
+  const entries = Object.entries(record.tags ?? {});
+  if (!entries.length) return ['Unknown species', 0];
+  return entries.sort((a, b) => b[1] - a[1])[0];
+}
 
-const TOP_SPECIES = [
-  { badge: 'Native', badgeCls: 'badge-euc', dotColor: 'var(--euc)', name: 'Eastern Grey Kangaroo', pct: '100%', barColor: 'var(--ochre)', count: '1,284' },
-  { badge: 'Native', badgeCls: 'badge-euc', dotColor: 'var(--euc)', name: 'Laughing Kookaburra', pct: '74%', barColor: 'var(--ochre)', count: '948' },
-  { badge: 'Vuln.', badgeCls: 'badge-gold', dotColor: 'var(--gold)', name: 'Koala', pct: '51%', barColor: 'var(--ochre)', count: '662' },
-  { badge: 'Native', badgeCls: 'badge-euc', dotColor: 'var(--euc)', name: 'Short-beaked Echidna', pct: '40%', barColor: 'var(--ochre)', count: '517' },
-  { badge: 'Invasive', badgeCls: 'badge-clay', dotColor: 'var(--clay)', name: 'Red Fox', pct: '21%', barColor: 'var(--clay)', count: '271' },
-];
+function aggregateSpecies(records: SearchResult[]) {
+  const counts: Record<string, number> = {};
+  for (const r of records) {
+    for (const [tag, n] of Object.entries(r.tags ?? {})) {
+      counts[tag] = (counts[tag] ?? 0) + n;
+    }
+  }
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+}
 
-const FEED = [
-  { sp: 'Southern Cassowary', conf: '98%', confCls: 'badge-gold', meta: 'CT-114 · Daintree NP', time: '2m ago' },
-  { sp: 'Common Wombat', conf: '96%', confCls: 'badge-euc', meta: 'CT-038 · Cradle Mtn', time: '14m ago' },
-  { sp: 'Feral Cat', conf: 'invasive', confCls: 'badge-clay', meta: 'CT-091 · Kakadu', time: '31m ago' },
-  { sp: 'Quokka', conf: '99%', confCls: 'badge-euc', meta: 'CT-007 · Rottnest Is.', time: '48m ago' },
-];
+function uploadsLast7Days(records: SearchResult[]) {
+  const buckets = Array.from({ length: 7 }, () => 0);
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 6);
+
+  for (const r of records) {
+    if (!r.uploaded_at) continue;
+    const d = new Date(r.uploaded_at);
+    if (Number.isNaN(d.getTime()) || d < start) continue;
+    const dayIndex = Math.floor((d.getTime() - start.getTime()) / 86_400_000);
+    if (dayIndex >= 0 && dayIndex < 7) buckets[dayIndex]++;
+  }
+  const max = Math.max(...buckets, 1);
+  return buckets.map((count, i) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    return {
+      day: DAY_LABELS[date.getDay()],
+      count,
+      h: `${Math.round((count / max) * 100)}%`,
+      peak: count === max && count > 0,
+    };
+  });
+}
+
+function timeAgo(iso?: string) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff) || diff < 0) return '—';
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [records, setRecords] = useState<SearchResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.listFiles();
+        if (!cancelled) setRecords(res.results);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load observatory data');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const speciesCounts = useMemo(() => aggregateSpecies(records), [records]);
+  const distinctSpecies = speciesCounts.length;
+  const imageCount = records.filter(r => r.file_type === 'image').length;
+  const videoCount = records.filter(r => r.file_type === 'video').length;
+  const bars = useMemo(() => uploadsLast7Days(records), [records]);
+  const recent = useMemo(
+    () =>
+      [...records]
+        .sort((a, b) => {
+          const ta = a.uploaded_at ? new Date(a.uploaded_at).getTime() : 0;
+          const tb = b.uploaded_at ? new Date(b.uploaded_at).getTime() : 0;
+          return tb - ta;
+        })
+        .slice(0, 5),
+    [records],
+  );
+
+  const topSpecies = speciesCounts.slice(0, 5);
+  const topMax = topSpecies[0]?.[1] ?? 1;
+
+  const stats = [
+    {
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></svg>,
+      icoStyle: { background: 'var(--ochre-tint)', color: 'var(--ochre-deep)' },
+      val: loading ? '…' : String(records.length),
+      label: 'Total detections',
+      trend: loading ? '' : `${imageCount} images · ${videoCount} videos`,
+      trendUp: true,
+    },
+    {
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3c4 4 6 7 6 10a6 6 0 01-12 0c0-3 2-6 6-10z"/></svg>,
+      icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc-deep)' },
+      val: loading ? '…' : String(distinctSpecies),
+      label: 'Distinct species',
+      trend: 'from live ML tags',
+      trendUp: true,
+    },
+    {
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 3-3 6 5"/></svg>,
+      icoStyle: { background: 'var(--gold-soft)', color: 'var(--gold)' },
+      val: loading ? '…' : String(imageCount),
+      label: 'Images',
+      trend: 'in observatory',
+      trendUp: true,
+    },
+    {
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7l2 10h12l2-10"/><path d="M8 7V5h8v2"/></svg>,
+      icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' },
+      val: loading ? '…' : String(videoCount),
+      label: 'Videos',
+      trend: 'frame-tagged media',
+      trendUp: false,
+    },
+  ];
+
   const h = new Date().getHours();
   const name = user?.given_name ?? user?.email?.split('@')[0] ?? 'Researcher';
   const greeting = h >= 5 && h < 12
@@ -67,109 +172,118 @@ export default function DashboardPage() {
       </header>
 
       <div className="page">
-        {/* Stats */}
+        {error && (
+          <div style={{ padding: '12px 16px', borderRadius: 'var(--r-md)', background: 'var(--clay-soft)', color: 'var(--clay)', fontSize: '14px', marginBottom: '16px' }}>{error}</div>
+        )}
+
         <div className="stat-grid">
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <div key={s.label} className="stat">
               <div className="stat-ico" style={s.icoStyle}>{s.icon}</div>
               <div className="stat-val">{s.val}</div>
               <div className="stat-label">{s.label}</div>
-              <div className={`stat-trend ${s.trendUp ? 'trend-up' : 'trend-down'}`}>{s.trend}</div>
+              {s.trend && <div className={`stat-trend ${s.trendUp ? 'trend-up' : 'trend-down'}`}>{s.trend}</div>}
             </div>
           ))}
         </div>
 
-        {/* Main grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: '20px', marginTop: '22px' }}>
-          {/* Left */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Chart */}
             <div className="panel">
               <div className="panel-head">
-                <h3>Detection activity</h3>
-                <div style={{ display: 'flex', gap: '18px', marginLeft: 'auto' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', color: 'var(--ink-soft)' }}><i style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--euc)', display: 'inline-block' }}></i>Native</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', color: 'var(--ink-soft)' }}><i style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--ochre)', display: 'inline-block' }}></i>Peak day</span>
-                </div>
+                <h3>Upload activity</h3>
+                <span style={{ fontSize: '12.5px', color: 'var(--ink-faint)' }}>Last 7 days</span>
               </div>
               <div className="panel-body">
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '14px', height: '200px', padding: '8px 4px 0' }}>
-                  {BARS.map((b) => (
-                    <div key={b.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '9px', height: '100%', justifyContent: 'flex-end' }}>
-                      <div style={{ width: '100%', maxWidth: '34px', borderRadius: '7px 7px 3px 3px', height: b.h, background: b.peak ? 'linear-gradient(180deg, var(--ochre) 0%, var(--ochre-deep) 100%)' : 'linear-gradient(180deg, var(--euc) 0%, var(--euc-deep) 100%)' }} />
-                      <span style={{ fontSize: '11.5px', color: 'var(--ink-faint)', fontWeight: 500 }}>{b.day}</span>
-                    </div>
-                  ))}
-                </div>
+                {loading ? (
+                  <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-faint)' }}>Loading…</div>
+                ) : records.length === 0 ? (
+                  <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-faint)' }}>
+                    No uploads yet. <Link href="/upload" style={{ color: 'var(--ochre)' }}>Upload wildlife media →</Link>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '14px', height: '200px', padding: '8px 4px 0' }}>
+                    {bars.map((b) => (
+                      <div key={b.day + b.count} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '9px', height: '100%', justifyContent: 'flex-end' }}>
+                        <div style={{ width: '100%', maxWidth: '34px', borderRadius: '7px 7px 3px 3px', height: b.h, minHeight: b.count > 0 ? '8px' : '4px', background: b.peak ? 'linear-gradient(180deg, var(--ochre) 0%, var(--ochre-deep) 100%)' : 'linear-gradient(180deg, var(--euc) 0%, var(--euc-deep) 100%)' }} />
+                        <span style={{ fontSize: '11.5px', color: 'var(--ink-faint)', fontWeight: 500 }}>{b.day}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Top species */}
             <div className="panel">
-              <div className="panel-head"><h3>Top species this week</h3><Link href="/search" className="panel-link">View all →</Link></div>
+              <div className="panel-head"><h3>Top species</h3><Link href="/search" className="panel-link">Search →</Link></div>
               <div className="panel-body" style={{ paddingTop: '6px', paddingBottom: '8px' }}>
-                {TOP_SPECIES.map((s) => (
-                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 0', borderBottom: '1px solid var(--line-soft)' }}>
-                    <span className={`badge ${s.badgeCls}`}><span className="dot" style={{ background: s.dotColor }} />{s.badge}</span>
-                    <span style={{ flexShrink: 0, width: '170px', fontWeight: 700, fontSize: '14px' }}>{s.name}</span>
-                    <div style={{ flex: 1, height: '6px', borderRadius: '999px', background: 'var(--sand-200)', overflow: 'hidden' }}>
-                      <div style={{ width: s.pct, height: '100%', borderRadius: '999px', background: s.barColor }} />
+                {loading ? (
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--ink-faint)' }}>Loading…</div>
+                ) : topSpecies.length === 0 ? (
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--ink-faint)' }}>No species tagged yet</div>
+                ) : (
+                  topSpecies.map(([name, count]) => (
+                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 0', borderBottom: '1px solid var(--line-soft)' }}>
+                      <span style={{ flexShrink: 0, width: '170px', fontWeight: 700, fontSize: '14px' }}>{name}</span>
+                      <div style={{ flex: 1, height: '6px', borderRadius: '999px', background: 'var(--sand-200)', overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.round((count / topMax) * 100)}%`, height: '100%', borderRadius: '999px', background: 'var(--ochre)' }} />
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--ink-soft)', width: '48px', textAlign: 'right' }}>{count}</span>
                     </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--ink-soft)', width: '48px', textAlign: 'right' }}>{s.count}</span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
 
-          {/* Right */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Recent feed */}
             <div className="panel">
               <div className="panel-head"><h3>Recent detections</h3><Link href="/manage" className="panel-link">Manage →</Link></div>
               <div className="panel-body" style={{ paddingTop: '6px', paddingBottom: '10px' }}>
-                {FEED.map((f) => (
-                  <div key={f.sp + f.time} style={{ display: 'flex', gap: '13px', padding: '13px 0', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
-                    <div style={{ width: '46px', height: '46px', borderRadius: '10px', background: 'var(--sand-200)', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{f.sp}</span>
-                        <span className={`badge ${f.confCls}`}>{f.conf}</span>
+                {loading ? (
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--ink-faint)' }}>Loading…</div>
+                ) : recent.length === 0 ? (
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--ink-faint)' }}>No detections yet</div>
+                ) : (
+                  recent.map((r) => {
+                    const [species, conf] = topTag(r);
+                    return (
+                      <div key={r.file_id} style={{ display: 'flex', gap: '13px', padding: '13px 0', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
+                        <div style={{ width: '46px', height: '46px', borderRadius: '10px', background: 'var(--sand-200)', flexShrink: 0, overflow: 'hidden' }}>
+                          {r.thumbnail_url
+                            // eslint-disable-next-line @next/next/no-img-element
+                            ? <img src={r.thumbnail_url} alt={species} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : null}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 600, fontSize: '14px' }}>{species}</span>
+                            <span className="badge badge-euc">{conf}×</span>
+                            <span className={`badge ${r.file_type === 'video' ? 'badge-sky' : 'badge-mute'}`}>{r.file_type}</span>
+                          </div>
+                          <div style={{ fontSize: '12.5px', color: 'var(--ink-faint)', marginTop: '3px', fontFamily: 'var(--font-mono)' }}>
+                            {r.file_id.slice(0, 18)}…
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--ink-ghost)', whiteSpace: 'nowrap' }}>{timeAgo(r.uploaded_at)}</span>
                       </div>
-                      <div style={{ fontSize: '12.5px', color: 'var(--ink-faint)', marginTop: '3px', fontFamily: 'var(--font-mono)' }}>{f.meta}</div>
-                    </div>
-                    <span style={{ fontSize: '12px', color: 'var(--ink-ghost)', whiteSpace: 'nowrap' }}>{f.time}</span>
-                  </div>
-                ))}
+                    );
+                  })
+                )}
               </div>
             </div>
 
-            {/* Alerts */}
             <div className="panel">
-              <div className="panel-head"><h3>Active alerts</h3><Link href="/notifications" className="panel-link">Configure →</Link></div>
+              <div className="panel-head"><h3>Quick actions</h3></div>
               <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px', background: 'var(--clay-soft)' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--clay)" strokeWidth="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>Red Fox in protected zone</div>
-                    <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)' }}>SNS email sent · 3 recipients</div>
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'var(--ink-ghost)' }}>31m</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px', background: 'var(--euc-tint)' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--euc-deep)" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.4 2.4 4.6-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>Cassowary watch · Daintree</div>
-                    <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)' }}>Target species spotted</div>
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'var(--ink-ghost)' }}>2m</span>
-                </div>
+                <Link href="/upload" className="btn btn-primary" style={{ justifyContent: 'center' }}>Upload new media</Link>
+                <Link href="/search" className="btn btn-ghost" style={{ justifyContent: 'center' }}>Search observatory</Link>
+                <Link href="/notifications" className="btn btn-ghost" style={{ justifyContent: 'center' }}>Configure tag alerts</Link>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Sync strip */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '22px', padding: '16px 22px', marginTop: '20px', background: 'linear-gradient(100deg, var(--bark-900), var(--bark-850))', borderRadius: 'var(--r-lg)', color: 'var(--cream)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
             <span style={{ width: '38px', height: '38px', borderRadius: '10px', display: 'grid', placeItems: 'center', background: 'oklch(0.40 0.02 153)' }}>
@@ -186,7 +300,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--cream)' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--euc)', boxShadow: '0 0 0 4px oklch(0.56 0.07 156 / 0.25)' }} />
-            Replication healthy · last sync 12s ago
+            {loading ? 'Loading observatory…' : `${records.length} records in shared catalogue`}
           </div>
         </div>
       </div>
