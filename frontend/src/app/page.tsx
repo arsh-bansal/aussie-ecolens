@@ -105,7 +105,18 @@ export default function LandingPage() {
       </section>
 
       <footer className="lp-foot">
-        <span>Aussie EcoLens — FIT5225 Wildlife Observatory</span>
+        <div className="lp-foot-row">
+          <span>Aussie EcoLens — FIT5225 Wildlife Observatory</span>
+          <nav className="lp-foot-links">
+            <Link href="/policy">Privacy</Link>
+            <Link href="/policy">Legal</Link>
+          </nav>
+        </div>
+        <p className="lp-foot-credit">
+          Hero photo by{' '}
+          <a href="https://www.pexels.com/photo/close-up-of-small-wallaby-18562264/" target="_blank" rel="noopener noreferrer">Yanming Guo</a>
+          {' '}on Pexels.
+        </p>
       </footer>
     </div>
   );
