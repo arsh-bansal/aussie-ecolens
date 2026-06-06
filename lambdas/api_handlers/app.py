@@ -7,6 +7,7 @@ Routes:
   POST /search/by-thumbnail  — thumbnail URL → full-size URL (2.2.2)
   POST /search/by-file       — tag uploaded image + find matches (2.2.3)
   POST /tags/modify          — bulk add/remove tags (2.3.1)
+  GET  /tags/subscribe       — list user's SNS alert subscriptions (2.3.3)
   POST /tags/subscribe       — email alert subscription via SNS (2.3.3)
   POST /files/delete         — delete files from S3 + Cosmos (2.3.2)
   POST /files                — manual write (fallback, not primary path)
