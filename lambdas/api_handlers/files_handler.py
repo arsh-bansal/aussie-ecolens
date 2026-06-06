@@ -4,12 +4,21 @@ Primary path: Arsh's Tagger writes to DynamoDB → Replicator → Cosmos.
 """
 from flask import Blueprint, request, jsonify
 from auth import require_auth
-from cosmos_client import get_file_by_sha, _get_container
+from cosmos_client import get_file_by_sha, list_all_files, _get_container
+from search_handler import _format_result
 from s3_presign import presign_s3_uri
 from azure.cosmos import exceptions
 from datetime import datetime, timezone
 
 files_bp = Blueprint("files", __name__)
+
+
+@files_bp.route("/files/list", methods=["GET"])
+@require_auth
+def list_files():
+    """Return every file in the shared observatory (Manage page)."""
+    docs = list_all_files()
+    return jsonify({"results": [_format_result(d) for d in docs]}), 200
 
 
 @files_bp.route("/files/status/<sha>", methods=["GET"])

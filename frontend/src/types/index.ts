@@ -24,6 +24,7 @@ export interface SearchResult {
   thumbnail_url?: string;
   url: string;
   tags: Record<string, number>;
+  uploaded_at?: string;
 }
 
 export interface SearchResponse {
@@ -63,6 +64,7 @@ export interface TagModifyRequest {
 export interface TagModifyResponse {
   updated: number;
   failed: string[];
+  records?: { file_id: string; tags: Record<string, number> }[];
 }
 
 export interface DeleteFilesRequest {

@@ -169,6 +169,21 @@ def resolve_species(value: str) -> str | None:
     return _INDEX.get(_normalise(value))
 
 
+def normalize_tag_key(tag: str) -> str:
+    """Canonical key for tag storage, search, add, and remove.
+
+    Known species resolve to the Tagger's canonical common name (any input case).
+    Custom manual tags (e.g. demoooo, hihi) are stored lowercase for
+    case-insensitive matching.
+    """
+    if not tag or not tag.strip():
+        return ""
+    canonical = resolve_species(tag)
+    if canonical:
+        return canonical
+    return _normalise(tag)
+
+
 # Fail loudly if the taxonomy drifts from the Tagger's expected class count.
 if len(LATIN_TO_COMMON) != _EXPECTED_LATIN_CLASSES:
     raise RuntimeError(
