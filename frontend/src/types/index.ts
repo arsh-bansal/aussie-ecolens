@@ -81,7 +81,17 @@ export interface SubscribeRequest {
 }
 
 export interface SubscribeResponse {
-  subscription_arn: string;
+  status: 'subscribed' | 'pending_confirmation';
+  tag: string;
+  email: string;
+  message?: string;
+}
+
+export interface ListSubscriptionsResponse {
+  tags: string[];
+  status: 'subscribed' | 'pending_confirmation' | 'none';
+  email: string | null;
+  message?: string;
 }
 
 export interface TagSearchRequest {

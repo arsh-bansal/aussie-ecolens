@@ -185,6 +185,21 @@ export default function DashboardPage() {
         </Link>
       </header>
 
+      <div style={{ position: 'relative', height: '240px', overflow: 'hidden', flexShrink: 0 }}>
+        <video autoPlay muted loop playsInline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}>
+          <source src="/dashboard-bg.mp4" type="video/mp4" />
+        </video>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, oklch(0.08 0.02 50 / 0.55) 0%, oklch(0.06 0.02 50 / 0.75) 60%, oklch(0.088 0.010 42) 100%)' }} />
+        <div style={{ position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 34px 28px' }}>
+          <div style={{ fontSize: '11px', letterSpacing: '0.24em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: '10px' }}>AI Wildlife Observatory · Live</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'clamp(24px, 3vw, 38px)', color: '#fff', lineHeight: 1.05, textShadow: '0 2px 20px oklch(0 0 0 / 0.5)' }}>{greeting}</div>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+            <Link href="/upload" className="btn btn-primary btn-sm">New upload</Link>
+            <Link href="/search" className="btn btn-sm" style={{ background: 'oklch(1 0 0 / 0.12)', color: '#fff', border: '1px solid oklch(1 0 0 / 0.25)', backdropFilter: 'blur(6px)' }}>Search detections</Link>
+          </div>
+        </div>
+      </div>
+
       <div className="page">
         {error && (
           <div style={{ padding: '12px 16px', borderRadius: 'var(--r-md)', background: 'var(--clay-soft)', color: 'var(--clay)', fontSize: '14px', marginBottom: '16px' }}>{error}</div>

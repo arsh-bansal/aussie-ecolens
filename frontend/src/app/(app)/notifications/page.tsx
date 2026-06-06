@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -20,16 +20,44 @@ export default function NotificationsPage() {
   const toast = useToast();
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<string | null>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pendingConfirm, setPendingConfirm] = useState(false);
   const [customTag, setCustomTag] = useState('');
+
+  const loadSubscriptions = useCallback(async () => {
+    setPageLoading(true);
+    try {
+      const res = await api.listSubscriptions();
+      setSubscribed(new Set(res.tags));
+      setPendingConfirm(res.status === 'pending_confirmation');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load subscriptions');
+    } finally {
+      setPageLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => { loadSubscriptions(); }, [loadSubscriptions]);
 
   const subscribe = async (tag: string) => {
     setLoading(tag);
     try {
-      await api.subscribe({ tag });
-      setSubscribed(prev => new Set([...prev, tag]));
-      toast.success(`Subscribed to "${tag}" alerts via SNS.`);
+      const res = await api.subscribe({ tag });
+      if (res.status === 'pending_confirmation') {
+        setPendingConfirm(true);
+        toast.success(`Check your email (${res.email}) to confirm SNS alerts.`);
+      } else {
+        setSubscribed(prev => new Set([...prev, res.tag]));
+        setPendingConfirm(false);
+        toast.success(`Subscribed to "${res.tag}" alerts via SNS.`);
+      }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Subscription failed');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('404') || msg.includes('Not Found')) {
+        toast.warning('SNS subscribe endpoint not yet deployed — coming soon.');
+      } else {
+        toast.error(msg || 'Subscription failed');
+      }
     } finally {
       setLoading(null);
     }
@@ -52,12 +80,22 @@ export default function NotificationsPage() {
       </header>
 
       <div className="page">
-        {/* Stats */}
-        <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        {pendingConfirm && (
+          <div style={{ padding: '12px 16px', borderRadius: 'var(--r-md)', background: 'var(--gold-soft)', color: 'var(--gold)', fontSize: '14px', marginBottom: '16px' }}>
+            Confirm the AWS SNS subscription email in your inbox, then refresh this page. Until confirmed, new species cannot be added to your filter.
+          </div>
+        )}
+
+        {pageLoading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+            <div style={{ width: '32px', height: '32px', border: '3px solid var(--line)', borderTopColor: 'var(--ochre)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        ) : (
+        <>
+        <div className="stat-grid" style={{ gridTemplateColumns: '200px' }}>
           {[
             { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/></svg>, icoStyle: { background: 'var(--euc-tint)', color: 'var(--euc)' }, val: String(subscribed.size), label: 'Active subscriptions' },
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>, icoStyle: { background: 'var(--ochre-tint)', color: 'var(--ochre)' }, val: '—', label: 'Emails sent (30d)' },
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>, icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' }, val: '—', label: 'Triggered today' },
           ].map(s => (
             <div key={s.label} className="stat">
               <div className="stat-ico" style={s.icoStyle}>{s.icon}</div>
@@ -140,6 +178,8 @@ export default function NotificationsPage() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
     </>
   );

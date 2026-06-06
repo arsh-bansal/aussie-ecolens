@@ -53,6 +53,22 @@ _db = DynamoDBService(
 log.info("tagger handler ready", files_table=settings.files_table, dry_run=settings.dry_run)
 
 
+# Search-by-image stages its transient query photo under this reserved prefix in
+# the SHARED uploads bucket (see api_handlers/tagging.py) and deletes it straight
+# after tagging. Both upload consumers (this tagger + the thumbnail Lambda) are
+# wired to the whole bucket via EventBridge, which cannot express "suffix .jpg
+# AND NOT prefix query-temp/" in a single pattern (array members are OR-matched),
+# so the prefix must be skipped in code. Without this guard the query image gets
+# a FILE#<sha> record whose S3 object is already gone -> NoSuchKey when opened
+# from search results, plus a persisted query file (assignment 4.3 forbids that).
+QUERY_TEMP_PREFIX = "query-temp/"
+
+
+def _is_query_temp_key(key: str) -> bool:
+    """True for transient search-by-image keys that must never be tagged."""
+    return key.startswith(QUERY_TEMP_PREFIX)
+
+
 # -----------------------------------------------------------------------------
 # AWS Lambda entry point
 # -----------------------------------------------------------------------------
@@ -99,6 +115,11 @@ def _process_one(bucket: str, key: str) -> dict[str, Any]:
     rather than poisoning sibling records in the same batch.
     """
     structlog.contextvars.bind_contextvars(s3_bucket=bucket, s3_key=key)
+
+    if _is_query_temp_key(key):
+        # Transient search-by-image upload — never download, tag, or persist it.
+        log.info("skipping transient query image (search-by-image)")
+        return {"s3_key": key, "skipped": "query-temp"}
 
     try:
         with tempfile.NamedTemporaryFile(

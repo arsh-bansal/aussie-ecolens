@@ -20,6 +20,39 @@ _s3 = boto3.client("s3", region_name=_REGION)
 PRESIGN_TTL = int(os.environ.get("PRESIGN_TTL", "3600"))
 
 
+def canonical_s3_uri(url: str | None) -> str | None:
+    """Normalise s3:// or presigned https S3 URLs to canonical s3://bucket/key.
+
+    Cosmos stores canonical s3:// URIs; users paste presigned https links from
+    search results. Used by /search/by-thumbnail before DB lookup.
+    """
+    if not url:
+        return None
+    raw = url.strip()
+    if raw.startswith("s3://"):
+        return raw
+    if not raw.startswith(("https://", "http://")):
+        return None
+    try:
+        parsed = urlparse(raw.split("?", 1)[0])
+        host = parsed.netloc
+        key = parsed.path.lstrip("/")
+        if not host or not key:
+            return None
+        # bucket.s3.ap-southeast-2.amazonaws.com/key
+        if ".s3." in host and host.endswith(".amazonaws.com"):
+            bucket = host.split(".s3.", 1)[0]
+            return f"s3://{bucket}/{key}"
+        # s3.ap-southeast-2.amazonaws.com/bucket/key
+        if host.startswith("s3.") and ".amazonaws.com" in host:
+            parts = key.split("/", 1)
+            if len(parts) == 2:
+                return f"s3://{parts[0]}/{parts[1]}"
+    except Exception:
+        return None
+    return None
+
+
 def presign_s3_uri(uri: str | None, expires: int = PRESIGN_TTL) -> str | None:
     """
     s3://bucket/key  ->  https://...?X-Amz-Signature=...  (temporary, signed)
