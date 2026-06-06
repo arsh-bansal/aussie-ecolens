@@ -56,9 +56,10 @@ export default function LandingPage() {
         worldRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.world}px,${ry * MAG.world}px,0)`;
       }
       if (portalRef.current) {
-        const s = lerp(1, 7.5, sp);
+        // Uluru starts tiny/far and zooms in to a standard size as you scroll.
+        const s = lerp(0.18, 1, e);
         portalRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.portal}px,${ry * MAG.portal}px,0)`;
-        portalRef.current.style.opacity = String(clamp(1 - (sp - 0.65) / 0.2, 0, 1));
+        portalRef.current.style.opacity = String(clamp(sp / 0.12, 0, 1));
       }
       if (curtainLRef.current && curtainRRef.current) {
         let openAmt = 0;
@@ -132,11 +133,11 @@ export default function LandingPage() {
           {/* Portal layer — Uluru cutout */}
           <div ref={portalRef} style={{ position: 'absolute', inset: 0, willChange: 'transform,opacity', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 2, transformOrigin: '50% 62%', backgroundImage: `url('/outback-scroll/uluru-cutout.png')` }} />
 
-          {/* Left curtain */}
-          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', left: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779975070/curtain_left_cdht6q.png'), linear-gradient(96deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
+          {/* Left curtain — eucalyptus tree */}
+          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '52%', left: '-6%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
 
-          {/* Right curtain */}
-          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '62%', right: '-8%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url('https://res.cloudinary.com/dsdhxhhqh/image/upload/v1779975071/curtain_right_a9bn3i.png'), linear-gradient(264deg, oklch(0.07 0.02 150) 0%, oklch(0.15 0.04 154) 52%, oklch(0.10 0.03 150) 84%, oklch(0.05 0.02 150) 100%)` }} />
+          {/* Right curtain — eucalyptus tree */}
+          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '52%', right: '-6%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
 
           {/* Vignette */}
           <div style={{ position: 'absolute', inset: 0, zIndex: 4, pointerEvents: 'none', background: 'radial-gradient(120% 100% at 50% 42%, transparent 52%, oklch(0.04 0.02 50 / 0.55) 100%), linear-gradient(180deg, oklch(0.05 0.02 50 / 0.45) 0%, transparent 22%, transparent 70%, oklch(0.045 0.02 50 / 0.7) 100%)' }} />
