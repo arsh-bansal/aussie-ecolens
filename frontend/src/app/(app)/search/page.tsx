@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import Modal from '@/components/ui/Modal';
@@ -68,7 +69,8 @@ function ResultCard({ r, onOpen }: { r: SearchResult; onOpen: () => void }) {
   );
 }
 
-export default function SearchPage() {
+function SearchView() {
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<SearchMode>('species');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[] | null>(null);
@@ -77,17 +79,19 @@ export default function SearchPage() {
   const [selected, setSelected] = useState<SearchResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const search = async (e?: React.FormEvent) => {
+  const search = async (e?: React.FormEvent, termArg?: string, modeArg?: SearchMode) => {
     e?.preventDefault();
+    const term = termArg ?? query;
+    const activeMode = modeArg ?? mode;
     setLoading(true);
     setError(null);
     try {
       let res;
-      if (mode === 'species') {
-        res = await api.searchBySpecies({ species: query.split(',').map(s => s.trim()).filter(Boolean) });
+      if (activeMode === 'species') {
+        res = await api.searchBySpecies({ species: term.split(',').map(s => s.trim()).filter(Boolean) });
       } else {
         const tagMap = Object.fromEntries(
-          query.split(',').map(s => s.trim()).filter(Boolean).map(t => [t, 1])
+          term.split(',').map(s => s.trim()).filter(Boolean).map(t => [t, 1])
         );
         res = await api.searchByTags({ tags: tagMap });
       }
@@ -98,6 +102,18 @@ export default function SearchPage() {
       setLoading(false);
     }
   };
+
+  // Run an incoming ?q= search (from the dashboard navbar). The navbar searches
+  // by species, so prefill the species tab and auto-run with the term directly
+  // (passed explicitly to avoid stale state on first render).
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (!q) return;
+    setQuery(q);
+    setMode('species');
+    search(undefined, q, 'species');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const searchByFile = async (file: File) => {
     setLoading(true);
@@ -240,5 +256,15 @@ export default function SearchPage() {
         )}
       </Modal>
     </>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary under static export (output:
+// 'export'); wrap the view so the build doesn't bail.
+export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchView />
+    </Suspense>
   );
 }

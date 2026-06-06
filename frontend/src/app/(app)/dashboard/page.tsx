@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 import type { SearchResult } from '@/types';
@@ -66,9 +67,17 @@ function timeAgo(iso?: string) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [records, setRecords] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const term = search.trim();
+    if (term) router.push(`/search?q=${encodeURIComponent(term)}`);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -157,10 +166,15 @@ export default function DashboardPage() {
           <div className="page-title">Field overview</div>
           <div className="page-sub">{greeting}</div>
         </div>
-        <div className="topbar-search">
+        <form className="topbar-search" onSubmit={submitSearch}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" strokeLinecap="round"/></svg>
-          <input placeholder="Search species, stations, uploads…" />
-        </div>
+          <input
+            placeholder="Search species, stations, uploads…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            aria-label="Search detections by species"
+          />
+        </form>
         <Link href="/notifications" className="icon-btn" title="Alerts">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0" strokeLinecap="round"/></svg>
           <span className="ping" />
