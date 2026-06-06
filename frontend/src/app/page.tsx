@@ -9,7 +9,6 @@ export default function LandingPage() {
   const router = useRouter();
 
   const worldRef = useRef<HTMLDivElement>(null);
-  const portalRef = useRef<HTMLDivElement>(null);
   const curtainLRef = useRef<HTMLDivElement>(null);
   const curtainRRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -24,7 +23,7 @@ export default function LandingPage() {
     const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
     const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(mx, v));
-    const MAG = { world: 6, portal: 7, curtainL: 14, curtainR: 14 };
+    const MAG = { world: 6, curtainL: 14, curtainR: 14 };
 
     let target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
     let entranceStart: number | null = null;
@@ -54,12 +53,6 @@ export default function LandingPage() {
       if (worldRef.current) {
         const s = lerp(1, 1.18, sp);
         worldRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.world}px,${ry * MAG.world}px,0)`;
-      }
-      if (portalRef.current) {
-        // Uluru starts tiny/far and zooms in to a standard size as you scroll.
-        const s = lerp(0.18, 1, e);
-        portalRef.current.style.transform = `scale(${s}) translate3d(${rx * MAG.portal}px,${ry * MAG.portal}px,0)`;
-        portalRef.current.style.opacity = String(clamp(sp / 0.12, 0, 1));
       }
       if (curtainLRef.current && curtainRRef.current) {
         let openAmt = 0;
@@ -130,14 +123,11 @@ export default function LandingPage() {
           {/* World layer — static outback panorama */}
           <div ref={worldRef} style={{ position: 'absolute', inset: 0, willChange: 'transform', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 1, transformOrigin: 'center center', backgroundImage: `url('/outback-scroll/background.png'), radial-gradient(130% 100% at 50% 18%, oklch(0.34 0.055 62) 0%, oklch(0.15 0.03 52) 46%, oklch(0.075 0.018 48) 78%)` }} />
 
-          {/* Portal layer — Uluru cutout */}
-          <div ref={portalRef} style={{ position: 'absolute', inset: 0, willChange: 'transform,opacity', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 2, transformOrigin: '50% 62%', backgroundImage: `url('/outback-scroll/uluru-cutout.png')` }} />
-
           {/* Left curtain — eucalyptus tree */}
-          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '52%', left: '-6%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
+          <div ref={curtainLRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', left: '4%', zIndex: 3, willChange: 'transform', transformOrigin: 'left center', backgroundSize: 'contain', backgroundPosition: 'left bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-left.webp')` }} />
 
           {/* Right curtain — eucalyptus tree */}
-          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '52%', right: '-6%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
+          <div ref={curtainRRef} style={{ position: 'absolute', top: '-6%', bottom: '-6%', width: '60%', right: '4%', zIndex: 3, willChange: 'transform', transformOrigin: 'right center', backgroundSize: 'contain', backgroundPosition: 'right bottom', backgroundRepeat: 'no-repeat', backgroundImage: `url('/outback-scroll/euc-right.webp')` }} />
 
           {/* Vignette */}
           <div style={{ position: 'absolute', inset: 0, zIndex: 4, pointerEvents: 'none', background: 'radial-gradient(120% 100% at 50% 42%, transparent 52%, oklch(0.04 0.02 50 / 0.55) 100%), linear-gradient(180deg, oklch(0.05 0.02 50 / 0.45) 0%, transparent 22%, transparent 70%, oklch(0.045 0.02 50 / 0.7) 100%)' }} />
