@@ -110,7 +110,7 @@ export default function LandingPage() {
         nav { opacity: 0; transition: opacity .9s ease .6s; }
         .hero-inner { opacity: 0; transform: translateY(20px); }
         @keyframes bobUp { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
-        @keyframes ctaPulse { 0%,100%{box-shadow:0 6px 24px oklch(0.55 0.13 46 / 0.4),0 0 0 0 oklch(0.69 0.135 56 / 0.5);} 50%{box-shadow:0 6px 24px oklch(0.55 0.13 46 / 0.4),0 0 0 10px oklch(0.69 0.135 56 / 0);} }
+        @keyframes ctaPulse { 0%,100%{box-shadow:0 6px 24px oklch(0.5 0.10 158 / 0.4),0 0 0 0 oklch(0.64 0.09 158 / 0.5);} 50%{box-shadow:0 6px 24px oklch(0.5 0.10 158 / 0.4),0 0 0 10px oklch(0.64 0.09 158 / 0);} }
         @keyframes s2Rise { from{opacity:0;transform:translateY(26px);} to{opacity:1;transform:translateY(0);} }
         .scene2.in .s2-eyebrow { animation: s2Rise .7s cubic-bezier(.2,.8,.2,1) both .05s; }
         .scene2.in h2 { animation: s2Rise .8s cubic-bezier(.2,.8,.2,1) both .15s; }
@@ -119,8 +119,8 @@ export default function LandingPage() {
         .scene2.in .s2-btn-2 { animation: s2Rise .7s cubic-bezier(.2,.8,.2,1) both .52s; }
         .cta-primary { animation: ctaPulse 2.6s ease-out infinite; }
         .cta-primary:hover { animation-play-state: paused; }
-        .hero-cta { position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;font-family:var(--font-body);font-size:12.5px;letter-spacing:0.12em;text-transform:uppercase;background:var(--ochre);color:#fff;border:none;padding:14px 26px;border-radius:999px;cursor:pointer;box-shadow:0 6px 24px oklch(0.55 0.13 46 / 0.4);transition:background .25s,transform .2s cubic-bezier(.2,.8,.2,1),box-shadow .25s; }
-        .hero-cta:hover { background:var(--ochre-deep);transform:translateY(-2px);box-shadow:0 12px 34px oklch(0.55 0.13 46 / 0.5); }
+        .hero-cta { position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;font-family:var(--font-body);font-size:12.5px;letter-spacing:0.12em;text-transform:uppercase;background:var(--ochre);color:#fff;border:none;padding:14px 26px;border-radius:999px;cursor:pointer;box-shadow:0 6px 24px oklch(0.5 0.10 158 / 0.4);transition:background .25s,transform .2s cubic-bezier(.2,.8,.2,1),box-shadow .25s; }
+        .hero-cta:hover { background:var(--ochre-deep);transform:translateY(-2px);box-shadow:0 12px 34px oklch(0.5 0.10 158 / 0.5); }
         .hero-cta::before { content:'';position:absolute;top:0;left:-130%;width:55%;height:100%;background:linear-gradient(100deg,transparent,oklch(1 0 0 / 0.45),transparent);transform:skewX(-18deg);transition:left .6s cubic-bezier(.2,.8,.2,1); }
         .hero-cta:hover::before { left:150%; }
         #page-exit { position:fixed;inset:0;z-index:300;background:#0a0608;opacity:0;pointer-events:none;transition:opacity .5s ease; }

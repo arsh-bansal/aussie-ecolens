@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Viaoda+Libre&family=Imprima&family=Space+Mono:wght@400;700&display=swap');
+/* Fonts are loaded via <link> in app/layout.tsx (Fraunces + Asap + Space Mono). */
 
 @tailwind base;
 @tailwind components;
@@ -22,13 +22,13 @@
   --ink-faint: oklch(0.585 0.012 66);
   --ink-ghost: oklch(0.455 0.011 58);
 
-  /* Primary accent — creek blue/teal, matched to the sign-in background.
+  /* Primary accent — eucalyptus green, matched to the outback/wildlife scene.
      Buttons, links, focus rings, CTAs all resolve through these. */
-  --primary:       oklch(0.690 0.115 232);
-  --primary-deep:  oklch(0.610 0.115 235);
-  --primary-soft:  oklch(0.320 0.070 235);
-  --primary-tint:  oklch(0.235 0.050 234);
-  --primary-light: oklch(0.800 0.090 226);
+  --primary:       oklch(0.640 0.090 158);
+  --primary-deep:  oklch(0.560 0.085 159);
+  --primary-soft:  oklch(0.300 0.052 157);
+  --primary-tint:  oklch(0.225 0.038 157);
+  --primary-light: oklch(0.770 0.075 156);
 
   /* Legacy ochre tokens now alias the primary so existing references (47 of
      them across the app) recolour in one place. Prefer --primary going fwd. */
@@ -66,8 +66,8 @@
   --r-sm: 8px;  --r-md: 12px;  --r-lg: 18px;  --r-xl: 26px;
   --sidebar-w: 246px;
 
-  --font-display: 'Viaoda Libre', Georgia, serif;
-  --font-body:    'Imprima', system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body:    'Asap', system-ui, sans-serif;
   --font-mono:    'Space Mono', ui-monospace, monospace;
 }
 
@@ -106,7 +106,7 @@ button { font-family: inherit; cursor: pointer; }
   white-space: nowrap; line-height: 1;
 }
 .btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--ochre); color: #fff; box-shadow: 0 4px 18px oklch(0.55 0.13 232 / 0.40); }
+.btn-primary { background: var(--ochre); color: #fff; box-shadow: 0 4px 18px oklch(0.55 0.10 158 / 0.40); }
 .btn-primary:hover { background: var(--ochre-deep); }
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-ghost:hover { background: var(--sand-150); border-color: var(--sand-300); }
@@ -171,7 +171,7 @@ button { font-family: inherit; cursor: pointer; }
 .sb-mark {
   width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
   background: linear-gradient(150deg, var(--ochre) 0%, var(--ochre-deep) 100%);
-  display: grid; place-items: center; box-shadow: 0 2px 10px oklch(0.5 0.13 232 / 0.5);
+  display: grid; place-items: center; box-shadow: 0 2px 10px oklch(0.5 0.10 158 / 0.5);
 }
 .sb-brand-name { font-family: var(--font-display); font-weight: 400; font-size: 19px; letter-spacing: 0.01em; color: var(--cream); line-height: 1; }
 .sb-brand-sub { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cream-soft); margin-top: 3px; }
@@ -352,7 +352,7 @@ button { font-family: inherit; cursor: pointer; }
 .auth-visual { position: relative; z-index: 2; background: transparent; }
 .auth-visual .visual-inner { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: space-between; padding: 40px 44px; pointer-events: none; }
 .auth-brand { display: flex; align-items: center; gap: 12px; }
-.auth-mark { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(150deg, var(--ochre) 0%, var(--ochre-deep) 100%); display: grid; place-items: center; box-shadow: 0 4px 16px oklch(0.5 0.13 232 / 0.5); }
+.auth-mark { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(150deg, var(--ochre) 0%, var(--ochre-deep) 100%); display: grid; place-items: center; box-shadow: 0 4px 16px oklch(0.5 0.10 158 / 0.5); }
 .auth-brand-name { font-family: var(--font-display); font-weight: 400; font-size: 21px; color: #fff; line-height: 1; }
 .auth-brand-sub { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: oklch(0.88 0.02 80 / 0.78); margin-top: 3px; }
 
