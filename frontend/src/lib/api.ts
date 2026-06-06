@@ -8,6 +8,7 @@ import type {
   DeleteFilesResponse,
   SubscribeRequest,
   SubscribeResponse,
+  ListSubscriptionsResponse,
   FileStatusResponse,
   SearchResponse,
   TagSearchRequest,
@@ -83,6 +84,9 @@ export const api = {
   // search), not the upload/auth API — so they route through queryApi(), not
   // aws(). subscribe lives on the query API (/tags/subscribe), so it must use
   // QUERY_BASE; otherwise pointing AWS_BASE at Adam's upload API would 404 it.
+  listSubscriptions: () =>
+    queryApi<ListSubscriptionsResponse>("/tags/subscribe", { method: "GET" }),
+
   subscribe: (body: SubscribeRequest) =>
     queryApi<SubscribeResponse>("/tags/subscribe", {
       method: "POST",

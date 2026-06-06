@@ -75,6 +75,17 @@ def _find_email_subscription(email: str) -> tuple[str | None, bool]:
             return None, pending
 
 
+def _tags_from_filter_policy(arn: str) -> list[str]:
+    """Read the species list from a confirmed subscription's filter policy."""
+    attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
+    policy_raw = attrs.get("FilterPolicy")
+    policy = json.loads(policy_raw) if policy_raw else {}
+    species = policy.get(_SPECIES_ATTRIBUTE, [])
+    if not isinstance(species, list):
+        species = [species] if species else []
+    return species
+
+
 def _add_tag_to_filter(arn: str, tag: str) -> None:
     """Merge `tag` into the species list of an existing subscription's policy."""
     attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
@@ -93,6 +104,38 @@ def _add_tag_to_filter(arn: str, tag: str) -> None:
         AttributeName="FilterPolicy",
         AttributeValue=json.dumps(policy),
     )
+
+
+@subscribe_bp.route("/tags/subscribe", methods=["GET"])
+@require_auth
+def list_subscriptions():
+    """Return species tags this user's SNS email subscription is filtered on."""
+    if not _TOPIC_ARN:
+        return jsonify({"tags": [], "status": "none", "email": None}), 200
+
+    email = getattr(request, "user_email", None)
+    if not email:
+        return jsonify({"error": "No email on your account"}), 400
+
+    try:
+        arn, pending = _find_email_subscription(email)
+        if arn:
+            tags = _tags_from_filter_policy(arn)
+            return jsonify({
+                "tags": tags,
+                "status": "subscribed",
+                "email": email,
+            }), 200
+        if pending:
+            return jsonify({
+                "tags": [],
+                "status": "pending_confirmation",
+                "email": email,
+                "message": "Confirm the AWS SNS email before alerts are active.",
+            }), 200
+        return jsonify({"tags": [], "status": "none", "email": email}), 200
+    except (ClientError, BotoCoreError) as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @subscribe_bp.route("/tags/subscribe", methods=["POST"])
