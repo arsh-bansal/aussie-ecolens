@@ -46,6 +46,10 @@
   --clay-soft: oklch(0.285 0.072 34);
   --gold:      oklch(0.810 0.118 84);
   --gold-soft: oklch(0.300 0.060 78);
+
+  /* Eyebrow / kicker accent — the small uppercase label above headings.
+     A named palette role; retune here to recolour every eyebrow at once. */
+  --eyebrow:   var(--gold);
   --sky:       oklch(0.715 0.090 232);
   --sky-soft:  oklch(0.270 0.052 235);
 
@@ -357,7 +361,7 @@ button { font-family: inherit; cursor: pointer; }
 .auth-brand-sub { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: oklch(0.88 0.02 80 / 0.78); margin-top: 3px; }
 
 .visual-quote { max-width: 460px; }
-.visual-quote .eyebrow { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--gold); font-weight: 400; }
+.visual-quote .eyebrow { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--eyebrow); font-weight: 400; }
 .visual-quote h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(32px, 3.4vw, 48px); color: #fff; line-height: 1.04; margin-top: 16px; letter-spacing: 0; text-shadow: 0 2px 30px oklch(0.05 0.02 60 / 0.6); }
 .visual-quote p { font-size: 15px; color: oklch(0.92 0.01 80 / 0.80); margin-top: 16px; line-height: 1.6; max-width: 410px; }
 .visual-meta { display: flex; gap: 30px; margin-top: 28px; }

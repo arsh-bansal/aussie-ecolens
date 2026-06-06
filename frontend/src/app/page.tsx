@@ -152,7 +152,7 @@ export default function LandingPage() {
           <div ref={heroRef} style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
             <div className="hero-inner" style={{ position: 'absolute', inset: 0 }}>
               <div style={{ position: 'absolute', top: '44%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px, calc(100vw - 48px))', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'oklch(0.810 0.118 84)' }}>AI Wildlife Observatory</div>
+                <div style={{ fontSize: '11px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--eyebrow)' }}>AI Wildlife Observatory</div>
                 <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'clamp(46px,6vw,86px)', lineHeight: 0.98, letterSpacing: '0.01em', margin: '18px 0 0', textShadow: '0 4px 40px oklch(0.05 0.02 50 / 0.6)', color: '#fff' }}>
                   STEP<span style={{ color: 'var(--ochre)', padding: '0 .12em' }}>›</span>INTO THE WILD
                 </h1>
@@ -176,7 +176,7 @@ export default function LandingPage() {
 
           {/* Scene 2 */}
           <div ref={scene2Ref} className="scene2" style={{ position: 'absolute', inset: 0, zIndex: 46, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', opacity: 0, pointerEvents: 'none', padding: '0 24px' }}>
-            <div className="s2-eyebrow" style={{ fontSize: '11px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'oklch(0.810 0.118 84)' }}>Continental-scale intelligence</div>
+            <div className="s2-eyebrow" style={{ fontSize: '11px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--eyebrow)' }}>Continental-scale intelligence</div>
             <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'clamp(38px,5.4vw,78px)', color: '#fff', letterSpacing: '0.03em', lineHeight: 1.05, margin: '16px 0 0', textShadow: '0 2px 20px oklch(0 0 0 / 0.4)' }}>INTO THE WILD UNSEEN</h2>
             <p style={{ fontSize: '20px', maxWidth: '480px', lineHeight: 1.6, color: 'oklch(1 0 0 / 0.82)', margin: '20px 0 0' }}>
               Singular eyes on astonishing creatures, built for the rangers, researchers and citizen scientists who watch over the world&apos;s strangest fauna.
