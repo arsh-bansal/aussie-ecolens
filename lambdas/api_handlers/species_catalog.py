@@ -169,6 +169,30 @@ def resolve_species(value: str) -> str | None:
     return _INDEX.get(_normalise(value))
 
 
+def expand_species(value: str) -> list[str]:
+    """Expand free-form input to all canonical species it could mean.
+
+    Used by species search so a partial term matches by substring: "common"
+    -> ["Common Brushtail Possum", "Common Wombat", ...]. Resolution order:
+
+    1. Exact resolve (canonical name / Latin / curated synonym) — if it maps to
+       a single species, return just that (preserves precise lookups).
+    2. Otherwise, substring match against canonical common names (normalised,
+       case-insensitive) — every name containing the term.
+
+    Returns canonical names (the exact stored tag keys), de-duplicated and
+    sorted. Empty list if nothing matches, so the caller's query matches nothing
+    rather than erroring.
+    """
+    exact = resolve_species(value)
+    if exact:
+        return [exact]
+    term = _normalise(value)
+    if not term:
+        return []
+    return sorted({c for c in CANONICAL_SPECIES if term in _normalise(c)})
+
+
 def normalize_tag_key(tag: str) -> str:
     """Canonical key for tag storage, search, add, and remove.
 

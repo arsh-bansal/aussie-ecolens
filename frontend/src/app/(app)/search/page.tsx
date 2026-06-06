@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import Modal from '@/components/ui/Modal';
@@ -90,7 +91,8 @@ function ResultCard({
   );
 }
 
-export default function SearchPage() {
+function SearchView() {
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<SearchMode>('species');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[] | null>(null);
@@ -101,57 +103,145 @@ export default function SearchPage() {
   const [selected, setSelected] = useState<SearchResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Progress message for the by-file search (the ML run can take 15-40s on a
+  // cold start). Drives an informative loading state instead of a bare spinner.
+  const [byFileStatus, setByFileStatus] = useState<string | null>(null);
+  // In-flight request, so a Cancel button can abort it.
+  const abortRef = useRef<AbortController | null>(null);
+  // Mode the user is trying to switch to while a search is running or results
+  // are on screen — held until they confirm the discard in the modal.
+  const [pendingMode, setPendingMode] = useState<SearchMode | null>(null);
+  const restoredRef = useRef(false);
 
-  const resetResults = () => {
+  const search = async (e?: React.FormEvent, termArg?: string, modeArg?: SearchMode) => {
+    e?.preventDefault();
+    const term = termArg ?? query;
+    const activeMode = modeArg ?? mode;
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setLoading(true);
+    setError(null);
+    setFullImageUrl(null);
+    setResults(null);
+    try {
+      const terms = term.split(',').map(s => s.trim()).filter(Boolean);
+      if (activeMode === 'species') {
+        const res = await api.searchBySpecies({ species: terms }, ac.signal);
+        setResults(res.results);
+      } else if (activeMode === 'tags') {
+        const tagMap = Object.fromEntries(terms.map(t => [t, 1]));
+        const res = await api.searchByTags({ tags: tagMap }, ac.signal);
+        setResults(res.results);
+      } else if (activeMode === 'thumbnail') {
+        const res = await api.searchByThumbnail({ thumbnail_url: term.trim() });
+        setFullImageUrl(res.url);
+      }
+    } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return; // cancelled — leave state as-is
+      setError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      if (abortRef.current === ac) { abortRef.current = null; setLoading(false); }
+    }
+  };
+
+  // Restore a previous search (results + query + mode) from sessionStorage so
+  // navigating away and back doesn't lose results — no need to re-run the
+  // (slow) search. Runs once, and only if there's no ?q= driving a fresh search.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (searchParams.get('q')) return; // a fresh navbar search takes precedence
+    try {
+      const saved = sessionStorage.getItem('search:last');
+      if (!saved) return;
+      const s = JSON.parse(saved) as { mode?: SearchMode; query?: string; results?: SearchResult[] };
+      if (s.mode) setMode(s.mode);
+      if (typeof s.query === 'string') setQuery(s.query);
+      if (Array.isArray(s.results)) setResults(s.results);
+    } catch { /* ignore corrupt cache */ }
+  }, [searchParams]);
+
+  // Persist results so they survive navigation. Cleared only when results are
+  // explicitly reset (new search / discard).
+  useEffect(() => {
+    try {
+      if (results) {
+        sessionStorage.setItem('search:last', JSON.stringify({ mode, query, results }));
+      } else {
+        sessionStorage.removeItem('search:last');
+      }
+    } catch { /* sessionStorage unavailable — non-fatal */ }
+  }, [results, mode, query]);
+
+  // Run an incoming ?q= search (from the dashboard navbar). The navbar searches
+  // by species, so prefill the species tab and auto-run with the term directly
+  // (passed explicitly to avoid stale state on first render).
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (!q) return;
+    setQuery(q);
+    setMode('species');
+    search(undefined, q, 'species');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // True when switching mode would lose something (a running search or any
+  // results on screen, including an explicit empty result set).
+  const hasUnsavedSearch = loading || results !== null || fullImageUrl !== null;
+
+  const cancelSearch = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setByFileStatus(null);
+    setLoading(false);
+  };
+
+  // Mode-tab click: if a search is running or results are shown, confirm first.
+  const requestMode = (m: SearchMode) => {
+    if (m === mode) return;
+    if (hasUnsavedSearch) { setPendingMode(m); return; }
+    applyMode(m);
+  };
+
+  const applyMode = (m: SearchMode) => {
+    cancelSearch();
+    setMode(m);
     setResults(null);
     setFullImageUrl(null);
     setError(null);
     setCopied(false);
-  };
-
-  const switchMode = (m: SearchMode) => {
-    setMode(m);
-    resetResults();
     setQuery('');
-  };
-
-  const search = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    setLoading(true);
-    setError(null);
-    setFullImageUrl(null);
-    setResults(null);
-    try {
-      const terms = query.split(',').map(s => s.trim()).filter(Boolean);
-      if (mode === 'species') {
-        const res = await api.searchBySpecies({ species: terms });
-        setResults(res.results);
-      } else if (mode === 'tags') {
-        const tagMap = Object.fromEntries(terms.map(t => [t, 1]));
-        const res = await api.searchByTags({ tags: tagMap });
-        setResults(res.results);
-      } else if (mode === 'thumbnail') {
-        const res = await api.searchByThumbnail({ thumbnail_url: query.trim() });
-        setFullImageUrl(res.url);
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setLoading(false);
-    }
+    setPendingMode(null);
   };
 
   const searchByFile = async (file: File) => {
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     setLoading(true);
     setError(null);
+    setResults(null);
     setFullImageUrl(null);
+
+    setByFileStatus('Uploading image…');
+    const t1 = setTimeout(() => setByFileStatus('Detecting species with AI…'), 700);
+    const t2 = setTimeout(
+      () => setByFileStatus('Still working — the model can take ~30s on first use…'),
+      12000,
+    );
+
     try {
-      const res = await api.searchByFile(file);
+      const res = await api.searchByFile(file, ac.signal);
       setResults(res.results);
     } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return; // cancelled
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
-      setLoading(false);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      setByFileStatus(null);
+      if (abortRef.current === ac) { abortRef.current = null; setLoading(false); }
     }
   };
 
@@ -190,7 +280,7 @@ export default function SearchPage() {
           <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="tag-toggle">
               {(['species', 'tags', 'thumbnail', 'file'] as SearchMode[]).map(m => (
-                <button key={m} className={mode === m ? 'on' : ''} onClick={() => switchMode(m)}>
+                <button key={m} className={mode === m ? 'on' : ''} onClick={() => requestMode(m)}>
                   {MODE_LABELS[m]}
                 </button>
               ))}
@@ -272,9 +362,17 @@ export default function SearchPage() {
         )}
 
         {loading && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px 0' }}>
             <div style={{ width: '32px', height: '32px', border: '3px solid var(--line)', borderTopColor: 'var(--ochre)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            {byFileStatus && (
+              <div role="status" aria-live="polite" style={{ fontSize: '14px', color: 'var(--ink-soft)', textAlign: 'center', maxWidth: '320px' }}>
+                {byFileStatus}
+              </div>
+            )}
+            <button className="btn btn-ghost btn-sm" type="button" onClick={cancelSearch}>
+              Cancel
+            </button>
           </div>
         )}
 
@@ -358,6 +456,38 @@ export default function SearchPage() {
           </div>
         )}
       </Modal>
+
+      {/* Confirm before switching mode when it would discard a running search
+          or current results. */}
+      <Modal
+        open={pendingMode !== null}
+        onClose={() => setPendingMode(null)}
+        title={loading ? 'Cancel the current search?' : 'Clear these results?'}
+        description={
+          loading
+            ? 'Switching tabs will stop the search that’s running. Continue?'
+            : 'Switching tabs will clear the results shown. You’ll need to search again to get them back. Continue?'
+        }
+      >
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-ghost" type="button" onClick={() => setPendingMode(null)}>
+            Stay here
+          </button>
+          <button className="btn btn-primary" type="button" onClick={() => pendingMode && applyMode(pendingMode)}>
+            {loading ? 'Stop & switch' : 'Switch & clear'}
+          </button>
+        </div>
+      </Modal>
     </>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary under static export (output:
+// 'export'); wrap the view so the build doesn't bail.
+export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchView />
+    </Suspense>
   );
 }

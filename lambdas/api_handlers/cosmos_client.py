@@ -101,11 +101,15 @@ def _append_tag_clauses(
     species_presence: list[str] | None,
     where_clauses: list[str],
     params: list[dict],
+    species_any_groups: list[list[str]] | None = None,
 ) -> None:
     """Append tag/species WHERE clauses (shared by global + per-user queries).
 
-    tag_filters:      {"Koala": 3, "Common Wombat": 1} → AND of c.tags["X"] >= N
-    species_presence: ["Dingo"]                         → IS_DEFINED(c.tags["X"])
+    tag_filters:        {"Koala": 3, "Common Wombat": 1} → AND of c.tags["X"] >= N
+    species_presence:   ["Dingo"]                         → IS_DEFINED(c.tags["X"])
+    species_any_groups: [["Common Wombat","Common Brushtail Possum"]]
+                        → AND across groups, OR within a group. Used by substring
+                          species search ("common" expands to one OR-group).
 
     Species keys are resolved to canonical names and escaped via _safe_species.
     Counts are bound as real parameters (only the property path is interpolated).
@@ -120,10 +124,20 @@ def _append_tag_clauses(
         for species in species_presence:
             where_clauses.append(f'IS_DEFINED(c.tags["{_safe_species(species)}"])')
 
+    if species_any_groups:
+        for group in species_any_groups:
+            if not group:
+                continue
+            ors = " OR ".join(
+                f'IS_DEFINED(c.tags["{_safe_species(s)}"])' for s in group
+            )
+            where_clauses.append(f"({ors})")
+
 
 def query_files(
     tag_filters: dict[str, int] | None = None,
     species_presence: list[str] | None = None,
+    species_any_groups: list[list[str]] | None = None,
 ) -> list[dict]:
     """Global tag/species search across ALL users' files (shared observatory).
 
@@ -138,7 +152,7 @@ def query_files(
 
     params: list[dict] = []
     where_clauses: list[str] = []
-    _append_tag_clauses(tag_filters, species_presence, where_clauses, params)
+    _append_tag_clauses(tag_filters, species_presence, where_clauses, params, species_any_groups)
 
     where = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
     query = "SELECT * FROM c" + where
