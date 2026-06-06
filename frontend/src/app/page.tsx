@@ -51,8 +51,17 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Split hero */}
+      {/* Full-bleed hero */}
       <header className="lp-hero">
+        <div className="lp-hero-bg" aria-hidden="true">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/outback-scroll/background.png" alt="" className="lp-hero-img" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/outback-scroll/euc-left.webp" alt="" className="lp-hero-tree lp-hero-tree--l" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/outback-scroll/euc-right.webp" alt="" className="lp-hero-tree lp-hero-tree--r" />
+          <div className="lp-hero-scrim" />
+        </div>
         <div className="lp-hero-copy">
           <div className="lp-eyebrow">Australian Wildlife Observatory</div>
           <h1 className="lp-title">Wildlife observation, organised.</h1>
@@ -63,15 +72,6 @@ export default function LandingPage() {
           <div className="lp-hero-actions">
             <Link href="/signup" className="btn btn-primary btn-lg">Request field access</Link>
             <Link href="/login" className="btn btn-ghost btn-lg">Sign in</Link>
-          </div>
-        </div>
-        <div className="lp-hero-visual" aria-hidden="true">
-          <div className="lp-hero-frame">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/outback-scroll/background.png" alt="" className="lp-hero-img" />
-            <img src="/outback-scroll/euc-left.webp" alt="" className="lp-hero-tree lp-hero-tree--l" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/outback-scroll/euc-right.webp" alt="" className="lp-hero-tree lp-hero-tree--r" />
           </div>
         </div>
       </header>
