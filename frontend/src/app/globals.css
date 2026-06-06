@@ -22,10 +22,20 @@
   --ink-faint: oklch(0.585 0.012 66);
   --ink-ghost: oklch(0.455 0.011 58);
 
-  --ochre:       oklch(0.690 0.135 56);
-  --ochre-deep:  oklch(0.620 0.135 50);
-  --ochre-soft:  oklch(0.300 0.060 50);
-  --ochre-tint:  oklch(0.225 0.042 52);
+  /* Primary accent — creek blue/teal, matched to the sign-in background.
+     Buttons, links, focus rings, CTAs all resolve through these. */
+  --primary:       oklch(0.690 0.115 232);
+  --primary-deep:  oklch(0.610 0.115 235);
+  --primary-soft:  oklch(0.320 0.070 235);
+  --primary-tint:  oklch(0.235 0.050 234);
+  --primary-light: oklch(0.800 0.090 226);
+
+  /* Legacy ochre tokens now alias the primary so existing references (47 of
+     them across the app) recolour in one place. Prefer --primary going fwd. */
+  --ochre:       var(--primary);
+  --ochre-deep:  var(--primary-deep);
+  --ochre-soft:  var(--primary-soft);
+  --ochre-tint:  var(--primary-tint);
 
   --euc:       oklch(0.680 0.085 158);
   --euc-deep:  oklch(0.600 0.080 158);
@@ -96,7 +106,7 @@ button { font-family: inherit; cursor: pointer; }
   white-space: nowrap; line-height: 1;
 }
 .btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--ochre); color: #fff; box-shadow: 0 4px 18px oklch(0.55 0.13 46 / 0.40); }
+.btn-primary { background: var(--ochre); color: #fff; box-shadow: 0 4px 18px oklch(0.55 0.13 232 / 0.40); }
 .btn-primary:hover { background: var(--ochre-deep); }
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-ghost:hover { background: var(--sand-150); border-color: var(--sand-300); }
@@ -161,7 +171,7 @@ button { font-family: inherit; cursor: pointer; }
 .sb-mark {
   width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
   background: linear-gradient(150deg, var(--ochre) 0%, var(--ochre-deep) 100%);
-  display: grid; place-items: center; box-shadow: 0 2px 10px oklch(0.5 0.13 46 / 0.5);
+  display: grid; place-items: center; box-shadow: 0 2px 10px oklch(0.5 0.13 232 / 0.5);
 }
 .sb-brand-name { font-family: var(--font-display); font-weight: 400; font-size: 19px; letter-spacing: 0.01em; color: var(--cream); line-height: 1; }
 .sb-brand-sub { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cream-soft); margin-top: 3px; }
@@ -342,7 +352,7 @@ button { font-family: inherit; cursor: pointer; }
 .auth-visual { position: relative; z-index: 2; background: transparent; }
 .auth-visual .visual-inner { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: space-between; padding: 40px 44px; pointer-events: none; }
 .auth-brand { display: flex; align-items: center; gap: 12px; }
-.auth-mark { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(150deg, var(--ochre) 0%, var(--ochre-deep) 100%); display: grid; place-items: center; box-shadow: 0 4px 16px oklch(0.5 0.13 46 / 0.5); }
+.auth-mark { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(150deg, var(--ochre) 0%, var(--ochre-deep) 100%); display: grid; place-items: center; box-shadow: 0 4px 16px oklch(0.5 0.13 232 / 0.5); }
 .auth-brand-name { font-family: var(--font-display); font-weight: 400; font-size: 21px; color: #fff; line-height: 1; }
 .auth-brand-sub { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: oklch(0.88 0.02 80 / 0.78); margin-top: 3px; }
 
