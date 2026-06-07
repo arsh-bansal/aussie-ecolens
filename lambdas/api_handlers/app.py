@@ -5,10 +5,12 @@ Routes:
   POST /search/tags          — find by tag counts (2.2.1)
   POST /search/species       — find by species presence (2.2.1)
   POST /search/by-thumbnail  — thumbnail URL → full-size URL (2.2.2)
-  POST /search/by-file       — tag uploaded image + find matches (2.2.3)
+  POST /search/by-file/presign — presigned PUT for query image (bypass 6 MB limit)
+  POST /search/by-file       — tag staged image + find matches (2.2.3)
   POST /tags/modify          — bulk add/remove tags (2.3.1)
   GET  /tags/subscribe       — list user's SNS alert subscriptions (2.3.3)
   POST /tags/subscribe       — email alert subscription via SNS (2.3.3)
+  POST /tags/unsubscribe     — remove one species or cancel all SNS alerts
   POST /files/delete         — delete files from S3 + Cosmos (2.3.2)
   POST /files                — manual write (fallback, not primary path)
   GET  /files/list           — list caller's files (Manage page)
