@@ -7,6 +7,18 @@ import type { SearchResult } from '@/types';
 
 const TABS = ['All records', 'Images', 'Videos'];
 
+type SortKey = 'species' | 'confidence' | 'type' | 'date';
+
+function formatDateTime(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(undefined, {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
 export default function ManagePage() {
   const [records, setRecords] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +30,8 @@ export default function ManagePage() {
   const [filter, setFilter] = useState('');
   const [bulkTag, setBulkTag] = useState('');
   const [tagInput, setTagInput] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,6 +127,46 @@ export default function ManagePage() {
 
   const topTag = (r: SearchResult) => Object.entries(r.tags ?? {}).sort((a, b) => b[1] - a[1])[0];
 
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      // Dates and confidence read best high-to-low first; names/types A→Z.
+      setSortDir(key === 'date' || key === 'confidence' ? 'desc' : 'asc');
+    }
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === 'species') {
+      cmp = (topTag(a)?.[0] ?? '').localeCompare(topTag(b)?.[0] ?? '');
+    } else if (sortKey === 'confidence') {
+      cmp = (topTag(a)?.[1] ?? 0) - (topTag(b)?.[1] ?? 0);
+    } else if (sortKey === 'type') {
+      cmp = a.file_type.localeCompare(b.file_type);
+    } else {
+      const ta = a.uploaded_at ? new Date(a.uploaded_at).getTime() : 0;
+      const tb = b.uploaded_at ? new Date(b.uploaded_at).getTime() : 0;
+      cmp = ta - tb;
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  const sortableTh = (label: string, key: SortKey) => (
+    <th
+      onClick={() => toggleSort(key)}
+      aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      title={`Sort by ${label.toLowerCase()}`}
+      style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+    >
+      {label}
+      <span style={{ marginLeft: '5px', fontSize: '9px', opacity: sortKey === key ? 1 : 0.35 }}>
+        {sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+      </span>
+    </th>
+  );
+
   return (
     <>
       <header className="topbar">
@@ -183,15 +237,16 @@ export default function ManagePage() {
                 <tr>
                   <th style={{ width: '38px' }}><input className="cb" type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
                   <th>Detection</th>
-                  <th>Top species</th>
-                  <th>Confidence</th>
-                  <th>Type</th>
+                  {sortableTh('Top species', 'species')}
+                  {sortableTh('Confidence', 'confidence')}
+                  {sortableTh('Type', 'type')}
                   <th>Tags</th>
+                  {sortableTh('Detected', 'date')}
                   <th style={{ width: '90px' }}></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(r => {
+                {sorted.map(r => {
                   const [species, conf] = topTag(r) ?? ['Unknown', 0];
                   return (
                     <tr key={r.file_id}>
@@ -235,10 +290,14 @@ export default function ManagePage() {
                           type="text"
                           placeholder="+ tag"
                           value={tagInput[r.file_id] ?? ''}
+                          size={Math.max(6, (tagInput[r.file_id]?.length ?? 0) + 2)}
                           onChange={e => setTagInput(prev => ({ ...prev, [r.file_id]: e.target.value }))}
                           onKeyDown={e => e.key === 'Enter' && addTag(r, tagInput[r.file_id] ?? '')}
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'transparent', border: '1px dashed var(--ochre-soft)', borderRadius: '999px', padding: '2px 8px', color: 'var(--ochre)', width: '60px', outline: 'none' }}
+                          style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'transparent', border: '1px dashed var(--ochre-soft)', borderRadius: '999px', padding: '2px 8px', color: 'var(--ochre)', minWidth: '60px', maxWidth: '280px', outline: 'none' }}
                         />
+                      </td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}>
+                        {formatDateTime(r.uploaded_at)}
                       </td>
                       <td>
                         <div className="row-act">
