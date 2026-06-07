@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Usage Record — Adam Kostarelas — FIT5225 Aussie EcoLens</title>
+<style>
+  :root{
+    --ink:#1f2421; --muted:#5b6b62; --line:#dfe5e0; --bg:#f6f8f6;
+    --euc:#2f6b4f; --euc-dark:#234f3b; --clay:#b4582f; --gold:#9a7d1e;
+    --l1:#5b6b62; --l2:#2f6b4f; --l3:#b4582f; --l4:#a3231f;
+    --warn-bg:#fdf3ea; --warn-bd:#e7c9a8;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:40px 28px 80px}
+  header.doc{
+    border:1px solid var(--line); border-top:5px solid var(--euc);
+    background:#fff; border-radius:10px; padding:26px 28px; margin-bottom:30px;
+    box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  header.doc h1{margin:0 0 4px; font-size:24px; letter-spacing:-.01em}
+  header.doc .sub{color:var(--muted); font-size:14px; margin-bottom:18px}
+  .meta{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 32px; font-size:14.5px}
+  .meta div{padding:3px 0; border-bottom:1px dotted var(--line)}
+  .meta b{color:var(--euc-dark); font-weight:600; display:inline-block; min-width:120px}
+  .todo{background:#fff6d6; padding:1px 6px; border-radius:4px; border:1px solid #e9d98a; font-size:13px}
+  h2{
+    font-size:18px; margin:38px 0 12px; padding-left:12px;
+    border-left:4px solid var(--euc); letter-spacing:-.01em;
+  }
+  p{margin:10px 0}
+  .lede{color:var(--muted)}
+  ul{margin:10px 0 10px 2px; padding-left:20px}
+  li{margin:5px 0}
+  code{background:#eef2ef; padding:1px 5px; border-radius:4px; font-size:13px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  a{color:var(--euc-dark)}
+  .card{background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin:14px 0}
+  table{border-collapse:collapse; width:100%; background:#fff; font-size:13px;
+    border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th,td{border-bottom:1px solid var(--line); padding:10px 11px; vertical-align:top; text-align:left}
+  th{background:var(--euc); color:#fff; font-weight:600; font-size:12px; letter-spacing:.02em; white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  tbody tr:nth-child(even){background:#fafcfa}
+  td .h{font-weight:600; color:var(--euc-dark)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11.5px; color:var(--muted)}
+  .badge{display:inline-block; color:#fff; font-weight:700; font-size:11px; padding:2px 8px;
+    border-radius:20px; letter-spacing:.03em}
+  .L1{background:var(--l1)} .L2{background:var(--l2)} .L3{background:var(--l3)} .L4{background:var(--l4)}
+  .legend{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 24px; margin-top:6px}
+  .legend div{font-size:14px; padding:8px 0; border-bottom:1px dotted var(--line)}
+  .warn{background:var(--warn-bg); border:1px solid var(--warn-bd); border-radius:8px;
+    padding:5px 9px; margin-top:7px; font-size:12px; color:#7a4b22}
+  .grid2{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px}
+  .stat{background:#fff; border:1px solid var(--line); border-radius:10px; padding:14px 16px}
+  .stat .n{font-size:22px; font-weight:700; color:var(--euc-dark); letter-spacing:-.02em}
+  .stat .k{font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+  .decl{background:var(--euc-dark); color:#eaf3ee; border-radius:10px; padding:22px 24px; margin-top:34px}
+  .decl .quote{font-size:17px; font-weight:600; margin-bottom:14px}
+  .decl .sign{display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    border-top:1px solid rgba(255,255,255,.2); padding-top:12px; font-size:14px}
+  footer{margin-top:30px; color:var(--muted); font-size:12px; text-align:center}
+  @media (max-width:720px){.meta,.legend,.grid2{grid-template-columns:1fr} table{font-size:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc">
+    <h1>AI Usage Record</h1>
+    <div class="sub">An honest account of how AI was used on this project — every claim traces to git or to my explicit statements.</div>
+    <div class="meta">
+      <div><b>Name</b> Adam Kostarelas</div>
+      <div><b>Student ID</b> <span class="todo">to be completed</span></div>
+      <div><b>Email</b> akos0018@student.monash.edu</div>
+      <div><b>Unit</b> FIT5225 2026 S1 — Assignment 2</div>
+      <div><b>Component</b> Auth / identity slice + frontend</div>
+      <div><b>Repo</b> github.com/arsh-bansal/aussie-ecolens <span class="mono">(private)</span></div>
+      <div><b>Git identities</b> <span class="mono">adamXbot</span>, <span class="mono">AdamXweb</span> (Adam Kostarelas)</div>
+      <div><b>Generated</b> 2026-06-07</div>
+    </div>
+  </header>
+
+  <p class="lede">Project: <b>Aussie EcoLens</b> — a multi-cloud serverless app where a user uploads an
+  image/video, an ML pipeline (MegaDetector + SpeciesNet) tags Australian wildlife, and a query API
+  returns results. I owned the <b>authentication / identity slice</b> (AWS Cognito, the auth UI, the
+  API Gateway JWT authorizer, and the upload <code>presign</code> Lambda), led the <b>Next.js frontend
+  consolidation</b>, and built the <b>search</b>, <b>manage</b>, and overall <b>UX</b> work.</p>
+
+  <h2>AI tools used</h2>
+  <div class="card">
+    <p style="margin-top:0"><b>Claude — used exclusively via the Claude Code CLI.</b> No other AI tools
+    (no Cursor, ChatGPT, Copilot, or Gemini) were used on this project.</p>
+    <p style="margin-bottom:0">I used Claude Code for: writing application & infrastructure code to my
+    specification, root-cause debugging, drafting documentation, and pair-style iteration across
+    multiple sessions (I keep handoff notes between sessions). It never had the ability to run my AWS
+    deploys, configure Cognito, or verify behaviour in a browser — I did all of that myself.</p>
+  </div>
+
+  <h2>How I used AI — narrative</h2>
+  <p>My working pattern was consistent across the whole project and sits at <b>autonomy level L2</b>
+  (see legend): <b>I chose the approach and directed the work step by step, and I reviewed and edited
+  every piece of output before it landed.</b> Claude wrote a lot of the code, but the design decisions,
+  the AWS setup and deploys, and all verification were mine. The most human-led piece was the original
+  Vite auth UI, which I designed and built first; the most AI-leaning piece was the root-cause analysis
+  for the search <code>NoSuchKey</code> bug, where Claude traced the cause and proposed the fix and I
+  validated it — but I still classify it L2 because I drove the investigation and confirmed the result.</p>
+
+  <h2>How I used AI — per work item</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Work item</th><th>Branch / PR</th><th>Commits</th><th>AI tool</th>
+        <th>Autonomy</th><th>What I did</th><th>What the AI did</th><th>How verified</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="h">AWS Cognito + auth/identity core</span></td>
+        <td><span class="mono">feature/auth</span><br>PR #3</td>
+        <td class="mono">54fd6aa, 8c96f71, 7b23820, 5ff7af5</td>
+        <td>Claude Code</td>
+        <td><span class="badge L2">L2</span></td>
+        <td>Designed the Cognito auth flow and built the original Vite auth UI; chose the ID-token Bearer model; set up the Cognito user pool &amp; app client in AWS; reviewed all generated code.</td>
+        <td>Generated the Cognito CloudFormation, the React/Next auth context &amp; lib, protected-route guards, and the global-sign-out / refresh-token-revocation logic to my spec.</td>
+        <td>Manual sign-up / verify / login / logout against the live Cognito pool; confirmed protected API returns 401 without a token.</td>
+      </tr>
+      <tr>
+        <td><span class="h">Next.js frontend consolidation</span>
+          <div class="warn">⚠️ Mixed authorship: the Next.js base in this commit was originally written by Shaurya (<span class="mono">58b5cb4</span>). My work here = the consolidation + auth wiring + CORS + docs, not the base app.</div></td>
+        <td><span class="mono">feature/auth</span><br>PR #3</td>
+        <td class="mono">97efc4f</td>
+        <td>Claude Code</td>
+        <td><span class="badge L2">L2</span></td>
+        <td>Decided to consolidate the team onto the Next.js app (replacing my Vite app); wired Cognito auth into it; fixed CORS; authored <code>docs/frontend-api-mapping.md</code>.</td>
+        <td>Performed the Vite&rarr;Next.js port mechanics, adjusted CORS config, and drafted the API-mapping doc.</td>
+        <td>Clean <code>next build</code> — type-check passes and all 13 routes build.</td>
+      </tr>
+      <tr>
+        <td><span class="h">Upload presign + infra / IAM / EventBridge</span></td>
+        <td><span class="mono">feature/auth</span><br>PR #3</td>
+        <td class="mono">2a6bf1b, fc4fe08, bdf6657, 16755ad</td>
+        <td>Claude Code</td>
+        <td><span class="badge L2">L2</span></td>
+        <td>Defined the <code>POST /uploads/presign</code> contract and the seed-metadata record; owned the IAM &amp; EventBridge IaC; ran the CloudFormation deploys; smoke-tested the live endpoint.</td>
+        <td>Reworked the presign Lambda to the contract, wrote the condition-guarded seed <code>PutItem</code> + IAM grants, and declared the EventBridge notification config in the template.</td>
+        <td>Live deploy + curl smoke test: presign returns 200 with a token / 401 without; the old <code>GET /uploads/check</code> now 404s.</td>
+      </tr>
+      <tr>
+        <td><span class="h">UX overhaul — landing, about, theming, accessibility</span></td>
+        <td><span class="mono">feature/auth-ui-polish</span><br>PR #12</td>
+        <td class="mono">~30 commits incl. 8a752a3, 9a633cf, 223db47, 8dd570f, 0913b6e</td>
+        <td>Claude Code</td>
+        <td><span class="badge L2">L2</span></td>
+        <td>Drove every look-and-feel decision (hero, eucalyptus palette, about cinematic), iterated heavily (several reverts), and specified UX fixes: paste-OTP-across-boxes + auto-submit, auth-video easing, WCAG 2.2 pass.</td>
+        <td>Implemented the components, styling, animations and the accessibility changes to my direction.</td>
+        <td>Visual review in the browser across all routes; accessibility conformance pass.</td>
+      </tr>
+      <tr>
+        <td><span class="h">Navbar search + substring species match + by-image UX</span>
+          <div class="warn">⚠️ Cross-area: the backend expansion touches <code>lambdas/api_handlers</code> (Rachana's query API) — flagged for that owner; needs a query-API redeploy to take effect.</div></td>
+        <td><span class="mono">fix/navbar-search</span><br>PR #17</td>
+        <td class="mono">08d2b02, b30ff8b, 2958b2a, 39ab636, d0e22a7</td>
+        <td>Claude Code</td>
+        <td><span class="badge L2">L2</span></td>
+        <td>Specified the search UX (wire navbar &rarr; <code>/search</code>, substring species match, cancel / persist / progress) and chose the OR-within-group / AND-across-group semantics; tested searches in the UI.</td>
+        <td>Implemented the frontend search flow and the backend <code>expand_species</code> / <code>species_any_groups</code> query expansion.</td>
+        <td>Manual searches in the UI (e.g. &ldquo;common&rdquo; &rarr; matching species); confirmed the backend part is pending the query-API redeploy.</td>
+      </tr>
+      <tr>
+        <td><span class="h">Search <code>NoSuchKey</code> bug — query-temp guard</span>
+          <div class="warn">⚠️ Cross-area: fix lands in the tagger &amp; thumbnail Lambdas (Arsh/Shaurya's area); needs their redeploy.</div></td>
+        <td><span class="mono">fix/query-temp-autotag</span><br>PR #16</td>
+        <td class="mono">9c479c0</td>
+        <td>Claude Code</td>
+        <td><span class="badge L2">L2</span></td>
+        <td>Reported the 404-on-search-result symptom, steered the investigation, validated the root cause and chosen fix, and confirmed the data cleanup.</td>
+        <td>Traced the root cause (search-by-image stages a transient <code>query-temp/</code> object that the tagger + thumbnail Lambdas pick up &rarr; orphan records &amp; <code>NoSuchKey</code>), showed an EventBridge-rule fix was impossible, and wrote the in-Lambda guard + unit tests.</td>
+        <td>Unit tests (thumbnail 8/8 green); DynamoDB orphan records deleted (0 remain).</td>
+      </tr>
+      <tr>
+        <td><span class="h">Manage page — sortable columns + detection date</span></td>
+        <td><span class="mono">feat/manage-column-sort</span><br>PR #23</td>
+        <td class="mono">1860b94</td>
+        <td>Claude Code</td>
+        <td><span class="badge L2">L2</span></td>
+        <td>Specified the sortable columns and the detection-date display on the manage page; reviewed the result.</td>
+        <td>Implemented the column sorting and date rendering.</td>
+        <td>Manual testing in the UI.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Autonomy scale (legend)</h2>
+  <div class="legend">
+    <div><span class="badge L1">L1</span> &nbsp;<b>Human-led</b> — I designed &amp; wrote it; AI only autocompleted or answered the odd question.</div>
+    <div><span class="badge L2">L2</span> &nbsp;<b>I instructed, AI built</b> — I chose the approach and directed it step by step; I reviewed &amp; edited all output.</div>
+    <div><span class="badge L3">L3</span> &nbsp;<b>AI-led, I supervised</b> — AI proposed the design and wrote most of the code; I steered, corrected, verified.</div>
+    <div><span class="badge L4">L4</span> &nbsp;<b>AI-autonomous</b> — AI made the decisions and produced the code with little direction; I mostly accepted it.</div>
+  </div>
+
+  <h2>Scope of work (reconciled against git)</h2>
+  <div class="grid2" style="margin-bottom:6px">
+    <div class="stat"><div class="n">5</div><div class="k">Pull requests (all merged)</div></div>
+    <div class="stat"><div class="n">48</div><div class="k">Authored commits (+4 merges)</div></div>
+    <div class="stat"><div class="n">~+6–8k</div><div class="k">Hand-authored lines (see note)</div></div>
+    <div class="stat"><div class="n">2</div><div class="k">Git identities (adamXbot / AdamXweb)</div></div>
+  </div>
+  <div class="card">
+    <p style="margin-top:0"><b>Pull requests:</b> #3 (auth slice + Next.js consolidation + infra),
+      #12 (UX overhaul), #16 (query-temp <code>NoSuchKey</code> fix), #17 (navbar search),
+      #23 (manage sort) — all merged. I also merged 4 of my teammates' PRs (integration commits).</p>
+    <p><b>Key files:</b> <code>infra/aws/cognito.yaml</code>, <code>infra/aws/infrastructure.yaml</code>,
+      <code>infra/aws/p1-deployer-policy.json</code>, the frontend auth / search / manage pages,
+      <code>frontend/src/lib/api.ts</code>, <code>frontend/src/lib/cognito.ts</code>, and docs
+      (<code>auth-contract.md</code>, <code>architecture-diagram.md</code>, <code>frontend-api-mapping.md</code>).</p>
+    <p><b>Line-count honesty note:</b> git credits my two identities with <b>+17,879 / −3,980</b> lines,
+      but <b>~+10k of those additions are a single consolidation commit</b> (<span class="mono">97efc4f</span>)
+      that imported the Next.js frontend base Shaurya originally authored and regenerated
+      <code>package-lock.json</code> (~8.1k generated lines). My genuinely hand-authored footprint is
+      therefore roughly <b>+6–8k lines</b> of code, config and docs — not ~18k.</p>
+    <p style="margin-bottom:0"><b>Off-git work (no commit trace):</b> AWS Cognito user-pool / app-client
+      setup &amp; testing; the AWS login / deploy-user configuration; CloudFormation deploys of the infra
+      stack (including diagnosing the CORS <code>DevOrigin</code> parameter-reuse gotcha); DynamoDB
+      <i>diagnostics &amp; orphan cleanup only</i> (the table itself is Arsh &amp; Rachana's); end-to-end
+      smoke-testing of the upload &rarr; tagger &rarr; search &rarr; SNS path; and handoff / setup docs.</p>
+  </div>
+
+  <h2>Notable AI mistakes &amp; limitations</h2>
+  <div class="card">
+    <p style="margin-top:0"><b>Things Claude got wrong that I caught/overrode:</b></p>
+    <ul>
+      <li><b>EventBridge-rule misstep.</b> For the <code>NoSuchKey</code> fix, Claude first proposed
+        excluding transient uploads at the EventBridge rule before working out that a single rule can't
+        AND a <code>.jpg</code> suffix with a NOT-<code>query-temp/</code> prefix (array members OR). We
+        pivoted to an in-Lambda guard, which is the fix that shipped.</li>
+      <li><b>CloudFormation <code>DevOrigin</code> gotcha.</b> The first deploy silently reused the
+        stack's stored <code>DevOrigin</code> value, so the CORS change didn't take. I had to redeploy
+        passing the origins explicitly in <code>--parameter-overrides</code>. AI didn't anticipate CFN's
+        stored-parameter reuse.</li>
+    </ul>
+    <p><b>For honesty — these were teammates' bugs I <i>diagnosed</i> with Claude, not AI mistakes on my own work:</b></p>
+    <ul>
+      <li>The tagger's full-item <code>put_item</code> overwriting my presign seed fields (a design issue
+        in another teammate's Lambda; the fix is theirs).</li>
+      <li>The query-API storing <code>COSMOS_KEY</code> as a plaintext Lambda env var (a security issue on
+        the query side that I flagged).</li>
+    </ul>
+    <p style="margin-bottom:0"><b>General limitation:</b> Claude could not perform AWS deploys, Cognito
+      console setup, or live browser/endpoint verification — I did all of that myself, and every piece of
+      AI-written code was reviewed by me before it was merged.</p>
+  </div>
+
+  <div class="decl">
+    <div class="quote">&ldquo;This is an accurate account of my AI usage on this project.&rdquo;</div>
+    <div class="sign">
+      <span><b>Adam Kostarelas</b> &nbsp;·&nbsp; akos0018@student.monash.edu</span>
+      <span>2026-06-07</span>
+    </div>
+  </div>
+
+  <footer>FIT5225 2026 S1 — Assignment 2 · Aussie EcoLens · generated with git evidence on 2026-06-07</footer>
+
+</div>
+</body>
+</html>
