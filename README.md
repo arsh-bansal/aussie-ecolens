@@ -181,8 +181,6 @@ scripts/                CORS update and utility scripts
 | Rachana | 35102896   | Initial query API handlers, Cosmos DB provisioning, species search fixes, profile work                                                                                              |
 | Shaurya | 33892180   | Early frontend wiring, profile/password UI, dashboard video hero                                                                                                                    |
 
-Adam also owns the official architecture diagram and team report assembly.
-
 ## Limitations and Assumptions
 
 - AWS Academy `LabRole` constrains IAM; Lambdas use the shared execution role pattern.
