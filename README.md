@@ -179,7 +179,7 @@ scripts/                CORS update and utility scripts
 | Arsh    | 35104201   | ML Tagger (container), Thumbnail, video tagging, Replicator, Notifier, Query API (Flask Lambda), Cosmos integration, Azure SWA deploy, frontend search/upload/dashboard integration |
 | Adam    | 34083243   | Cognito + core AWS infra, presign upload API, Next.js migration, auth UI, landing/theme polish, search UX                                                                           |
 | Rachana | 35102896   | Initial query API handlers, Cosmos DB provisioning, species search fixes, profile work                                                                                              |
-| Shaurya | 33892180   | Early frontend wiring, profile/password UI, dashboard video hero                                                                                                                    |
+| Shaurya | 33892180   | Early frontend wiring, profile/password UI, dashboard video hero, Authentication Bug reviews                                                                                        |
 
 ## Limitations and Assumptions
 
