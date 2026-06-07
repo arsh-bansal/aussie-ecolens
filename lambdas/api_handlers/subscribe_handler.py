@@ -46,6 +46,14 @@ _sns = boto3.client("sns", region_name=_REGION)
 _PENDING = "PendingConfirmation"
 _DELETED = "Deleted"
 
+# Sentinel species name parked in the FilterPolicy when the user "unsubscribes
+# from all". The SNS subscription itself stays confirmed — it just filters on a
+# value the Notifier will never publish, so no emails arrive. This avoids
+# tearing down the subscription, which would force a fresh confirmation email
+# on the next subscribe and re-expose the user to email-client link-prefetchers
+# that silently auto-unsubscribe.
+_PAUSE_SENTINEL = "__paused__"
+
 
 def _find_email_subscription(email: str) -> tuple[str | None, bool]:
     """Locate this email's subscription on the topic.
@@ -76,18 +84,28 @@ def _find_email_subscription(email: str) -> tuple[str | None, bool]:
 
 
 def _tags_from_filter_policy(arn: str) -> list[str]:
-    """Read the species list from a confirmed subscription's filter policy."""
+    """Read the species list from a confirmed subscription's filter policy.
+
+    Excludes the pause sentinel so the UI shows a clean list.
+    """
     attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
     policy_raw = attrs.get("FilterPolicy")
     policy = json.loads(policy_raw) if policy_raw else {}
     species = policy.get(_SPECIES_ATTRIBUTE, [])
     if not isinstance(species, list):
         species = [species] if species else []
-    return species
+    return [s for s in species if s != _PAUSE_SENTINEL]
 
 
 def _remove_tag_from_filter(arn: str, tag: str) -> bool:
-    """Remove `tag` from the species filter. Returns True if subscription removed."""
+    """Remove `tag` from the species filter. Returns True if last species removed.
+
+    When the last real species is removed we park the FilterPolicy on a
+    sentinel rather than tearing the SNS subscription down — same reasoning as
+    the "unsubscribe from all" path: keep the confirmed subscription alive so
+    a resubscribe later doesn't re-trigger a confirmation email that email
+    clients can auto-click.
+    """
     attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
     policy_raw = attrs.get("FilterPolicy")
     policy = json.loads(policy_raw) if policy_raw else {}
@@ -96,9 +114,15 @@ def _remove_tag_from_filter(arn: str, tag: str) -> bool:
     if not isinstance(species, list):
         species = [species] if species else []
 
-    species = [s for s in species if s != tag]
+    species = [s for s in species if s != tag and s != _PAUSE_SENTINEL]
     if not species:
-        _sns.unsubscribe(SubscriptionArn=arn)
+        species = [_PAUSE_SENTINEL]
+        policy[_SPECIES_ATTRIBUTE] = species
+        _sns.set_subscription_attributes(
+            SubscriptionArn=arn,
+            AttributeName="FilterPolicy",
+            AttributeValue=json.dumps(policy),
+        )
         return True
 
     policy[_SPECIES_ATTRIBUTE] = species
@@ -111,7 +135,11 @@ def _remove_tag_from_filter(arn: str, tag: str) -> bool:
 
 
 def _add_tag_to_filter(arn: str, tag: str) -> None:
-    """Merge `tag` into the species list of an existing subscription's policy."""
+    """Merge `tag` into the species list of an existing subscription's policy.
+
+    Drops the pause sentinel if present (subscription was paused via
+    "unsubscribe from all"; adding any real species reactivates it).
+    """
     attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
     policy_raw = attrs.get("FilterPolicy")
     policy = json.loads(policy_raw) if policy_raw else {}
@@ -119,6 +147,7 @@ def _add_tag_to_filter(arn: str, tag: str) -> None:
     species = policy.get(_SPECIES_ATTRIBUTE, [])
     if not isinstance(species, list):
         species = [species]
+    species = [s for s in species if s != _PAUSE_SENTINEL]
     if tag not in species:
         species.append(tag)
 
@@ -248,11 +277,20 @@ def unsubscribe():
             return jsonify({"status": "none", "email": email}), 200
 
         if body.get("all"):
-            _sns.unsubscribe(SubscriptionArn=arn)
+            # Park the FilterPolicy on a sentinel value the Notifier never
+            # publishes — the SNS subscription itself stays confirmed, so a
+            # later resubscribe doesn't trigger a fresh confirmation email
+            # (which some email clients auto-click while scanning links,
+            # silently killing the subscription).
+            _sns.set_subscription_attributes(
+                SubscriptionArn=arn,
+                AttributeName="FilterPolicy",
+                AttributeValue=json.dumps({_SPECIES_ATTRIBUTE: [_PAUSE_SENTINEL]}),
+            )
             return jsonify({
                 "status": "unsubscribed_all",
                 "email": email,
-                "message": "All species alerts cancelled via AWS SNS.",
+                "message": "All species alerts cancelled.",
             }), 200
 
         raw_tag = (body.get("tag") or "").strip()

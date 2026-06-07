@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { SPECIES_OPTIONS } from '@/lib/species';
 import { useToast } from '@/contexts/ToastContext';
 
 // The `tag` MUST be the exact canonical species name the Tagger stores and the
@@ -227,15 +228,21 @@ export default function NotificationsPage() {
 
             {/* Custom tag */}
             <div style={{ padding: '18px 20px' }}>
-              <p style={{ fontSize: '13px', color: 'var(--ink-faint)', marginBottom: '12px' }}>Subscribe to a custom species or tag:</p>
+              <p style={{ fontSize: '13px', color: 'var(--ink-faint)', marginBottom: '12px' }}>
+                Subscribe to any other species — pick from the list or type a custom tag:
+              </p>
               <form onSubmit={handleCustom} style={{ display: 'flex', gap: '10px' }}>
                 <input
                   className="input"
-                  placeholder="e.g. echidna, dingo, wild pig…"
+                  placeholder="Start typing a species name…"
                   value={customTag}
                   onChange={e => setCustomTag(e.target.value)}
+                  list="species-options-alerts"
                   style={{ flex: 1, padding: '10px 13px', fontSize: '14px' }}
                 />
+                <datalist id="species-options-alerts">
+                  {SPECIES_OPTIONS.map(s => <option key={s} value={s} />)}
+                </datalist>
                 <button className="btn btn-primary" type="submit" disabled={!customTag.trim() || !!loading}>
                   {loading === customTag.trim() ? '…' : 'Subscribe'}
                 </button>
@@ -262,6 +269,9 @@ export default function NotificationsPage() {
               ))}
               <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--ochre-tint)', border: '1px solid var(--ochre-soft)', fontSize: '13px', color: 'var(--ink-soft)' }}>
                 Emails are sent to the address on your Cognito account. Make sure it is verified.
+              </div>
+              <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--clay-soft)', border: '1px solid var(--clay-soft)', fontSize: '13px', color: 'var(--ink-soft)' }}>
+                <strong style={{ color: 'var(--clay)' }}>Heads up:</strong> some email clients (Gmail, Outlook, corporate mail) auto-scan links in incoming mail, which can silently click AWS&apos;s unsubscribe link and cancel your alerts. If you stop getting emails, just resubscribe here — your tag preferences stay in the app.
               </div>
             </div>
           </div>
