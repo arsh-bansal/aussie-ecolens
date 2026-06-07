@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import OutbackBackground from '@/components/auth/OutbackBackground';
+import { useAuthFocus } from '@/components/auth/useAuthFocus';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -13,6 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { focused, formFocusProps } = useAuthFocus();
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,16 +39,14 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="auth">
-      <video className="auth-video" autoPlay muted loop playsInline preload="auto">
-        <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
-      </video>
+    <main className={`auth${focused ? ' auth--focused' : ''}`}>
+      <OutbackBackground />
       <div className="auth-bg-veil" />
 
       {/* Left — visual */}
       <section className="auth-visual">
         <div className="visual-inner">
-          <div className="auth-brand">
+          <Link href="/" className="auth-brand auth-brand--link" aria-label="Aussie EcoLens — home">
             <span className="auth-mark">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" strokeLinecap="round"/></svg>
             </span>
@@ -53,7 +54,7 @@ export default function LoginPage() {
               <div className="auth-brand-name">Aussie EcoLens</div>
               <div className="auth-brand-sub">Wildlife Observatory</div>
             </div>
-          </div>
+          </Link>
           <div className="visual-quote">
             <div className="eyebrow">AI-powered field intelligence</div>
             <h2>See every creature the bush keeps hidden.</h2>
@@ -69,7 +70,7 @@ export default function LoginPage() {
 
       {/* Right — form */}
       <section className="auth-panel">
-        <form className="auth-form" onSubmit={onSubmit}>
+        <form className="auth-form" onSubmit={onSubmit} {...formFocusProps}>
           <div className="auth-kicker">Welcome back</div>
           <h1>Sign in to the observatory</h1>
           <p className="lede">Pick up where you left off — your detections, alerts and review queue are waiting.</p>

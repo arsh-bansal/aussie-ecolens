@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import OutbackBackground from '@/components/auth/OutbackBackground';
+import { useAuthFocus } from '@/components/auth/useAuthFocus';
 
 export default function SignupPage() {
   const { register } = useAuth();
@@ -12,6 +14,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const { focused, formFocusProps } = useAuthFocus();
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -36,15 +39,13 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="auth">
-      <video className="auth-video" autoPlay muted loop playsInline preload="auto">
-        <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
-      </video>
+    <main className={`auth${focused ? ' auth--focused' : ''}`}>
+      <OutbackBackground />
       <div className="auth-bg-veil" />
 
       <section className="auth-visual">
         <div className="visual-inner">
-          <div className="auth-brand">
+          <Link href="/" className="auth-brand auth-brand--link" aria-label="Aussie EcoLens — home">
             <span className="auth-mark">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" strokeLinecap="round"/></svg>
             </span>
@@ -52,7 +53,7 @@ export default function SignupPage() {
               <div className="auth-brand-name">Aussie EcoLens</div>
               <div className="auth-brand-sub">Wildlife Observatory</div>
             </div>
-          </div>
+          </Link>
           <div className="visual-quote">
             <div className="eyebrow">Join the field network</div>
             <h2>Turn your camera traps into living data.</h2>
@@ -66,7 +67,7 @@ export default function SignupPage() {
       </section>
 
       <section className="auth-panel">
-        <form className="auth-form" onSubmit={onSubmit}>
+        <form className="auth-form" onSubmit={onSubmit} {...formFocusProps}>
           <div className="auth-kicker">Create account</div>
           <h1>Request field access</h1>
           <p className="lede">Set up your observer profile. We&apos;ll send a verification code to confirm your email.</p>

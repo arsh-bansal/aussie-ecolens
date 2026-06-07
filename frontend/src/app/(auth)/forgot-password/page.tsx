@@ -5,11 +5,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import OutbackBackground from '@/components/auth/OutbackBackground';
+import { useAuthFocus } from '@/components/auth/useAuthFocus';
 
 export default function ForgotPasswordPage() {
   const { sendResetCode, resetPassword } = useAuth();
   const toast = useToast();
   const router = useRouter();
+  const { focused, formFocusProps } = useAuthFocus();
   const [step, setStep] = useState<'email' | 'reset'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -48,15 +51,13 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <main className="auth">
-      <video className="auth-video" autoPlay muted loop playsInline preload="auto">
-        <source src="/into-the-wild-unseen.mp4" type="video/mp4" />
-      </video>
+    <main className={`auth${focused ? ' auth--focused' : ''}`}>
+      <OutbackBackground />
       <div className="auth-bg-veil" />
 
       <section className="auth-visual">
         <div className="visual-inner">
-          <div className="auth-brand">
+          <Link href="/" className="auth-brand auth-brand--link" aria-label="Aussie EcoLens — home">
             <span className="auth-mark">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" strokeLinecap="round"/></svg>
             </span>
@@ -64,7 +65,7 @@ export default function ForgotPasswordPage() {
               <div className="auth-brand-name">Aussie EcoLens</div>
               <div className="auth-brand-sub">Wildlife Observatory</div>
             </div>
-          </div>
+          </Link>
           <div className="visual-quote">
             <div className="eyebrow">Account recovery</div>
             <h2>{step === 'email' ? 'Forgot your password?' : 'Set a new password.'}</h2>
@@ -75,7 +76,7 @@ export default function ForgotPasswordPage() {
 
       <section className="auth-panel">
         {step === 'email' ? (
-          <form className="auth-form" onSubmit={onEmailSubmit}>
+          <form className="auth-form" onSubmit={onEmailSubmit} {...formFocusProps}>
             <div className="auth-icon-badge">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
             </div>
@@ -94,7 +95,7 @@ export default function ForgotPasswordPage() {
             <p className="auth-sub"><Link href="/login" className="link-ochre">← Back to sign in</Link></p>
           </form>
         ) : (
-          <form className="auth-form" onSubmit={onResetSubmit}>
+          <form className="auth-form" onSubmit={onResetSubmit} {...formFocusProps}>
             <div className="auth-kicker">Account recovery</div>
             <h1>Set new password</h1>
             <p className="lede">Code sent to <strong style={{ color: 'var(--ink)' }}>{email}</strong></p>
