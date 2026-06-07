@@ -1,10 +1,10 @@
 """Synchronous "tag-only" Lambda entry point (find-by-uploaded-file).
 
-Powers the query API's POST /query-file feature (assignment 2.2.3): the
-caller hands over an image, this runs the same MegaDetector + SpeciesNet
+Powers the query API's POST /search/by-file feature (assignment 2.2.3): the
+caller hands over an image or video, this runs the same MegaDetector + SpeciesNet
 pipeline as the tagger, and returns just the detected species counts. It
-does NOT download from the uploads bucket, write to DynamoDB, or store
-anything - the image is transient, used only to compute tags for a search.
+does NOT write to DynamoDB or store anything — the media is transient, used
+only to compute tags for a search.
 
 It reuses the shared cold-start runtime (models + detector/classifier), so
 there is exactly one ML codebase; this is simply a second entry point on
@@ -41,6 +41,7 @@ import structlog
 from aussie_ecolens_tagger import _runtime
 from aussie_ecolens_tagger.config import settings
 from aussie_ecolens_tagger.domain.pipeline import tag_image
+from aussie_ecolens_tagger.domain.video_pipeline import is_video_path, tag_video_path
 from aussie_ecolens_tagger.exceptions import TaggerError
 from aussie_ecolens_tagger.logging import get_logger
 from aussie_ecolens_tagger.species import common_name
@@ -55,7 +56,7 @@ log.info("query handler ready")
 
 
 class QueryInputError(TaggerError):
-    """The query event did not contain a usable image reference."""
+    """The query event did not contain a usable media reference."""
 
 
 def _to_common_names(tags: dict[str, int]) -> dict[str, int]:
@@ -73,13 +74,12 @@ def _to_common_names(tags: dict[str, int]) -> dict[str, int]:
     return out
 
 
-def _load_image_to_tmp(event: dict[str, Any], tmp_dir: Path) -> Path:
-    """Materialise the request image into a temp file, return its path.
+def _load_media_to_tmp(event: dict[str, Any], tmp_dir: Path) -> Path:
+    """Materialise the request media into a temp file, return its path.
 
     Accepts either an inline base64 image or an S3 {bucket, key} reference.
     Raises QueryInputError if neither is present or the data is unusable.
     """
-    # S3 reference - preferred for large images (no payload limit).
     bucket = event.get("bucket")
     key = event.get("key")
     if bucket and key:
@@ -88,7 +88,6 @@ def _load_image_to_tmp(event: dict[str, Any], tmp_dir: Path) -> Path:
         _s3.download(bucket, key, dest)
         return dest
 
-    # Inline base64 - convenient for small images.
     b64 = event.get("image")
     if b64:
         try:
@@ -107,7 +106,7 @@ def _load_image_to_tmp(event: dict[str, Any], tmp_dir: Path) -> Path:
 
 
 def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]:
-    """Run the tagging pipeline on a transient image and return tag counts.
+    """Run the tagging pipeline on transient media and return tag counts.
 
     Args:
         event: {"image": <base64>} or {"bucket","key"}.
@@ -120,28 +119,68 @@ def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]
     request_id = getattr(context, "aws_request_id", "local")
     structlog.contextvars.bind_contextvars(request_id=request_id)
 
+    result_key = event.get("result_key")
+    pending_key = event.get("pending_key")
+    source_bucket = event.get("bucket")
+    source_key = event.get("key")
+    response: dict[str, Any]
+
     try:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_dir = Path(tmp)
-            image_path = _load_image_to_tmp(event, tmp_dir)
-            image = _s3.decode_image(image_path)
-            result = tag_image(
-                image_path=image_path,
-                image=image,
-                detector=_detector,
-                classifier=_classifier,
-                snip_size=settings.snip_size,
-                # Not persisted; these are placeholders for the shared
-                # pipeline signature, never stored anywhere.
-                s3_bucket=event.get("bucket", "query"),
-                s3_key=event.get("key", "query-file"),
-            )
-        tags = _to_common_names(result.tags)
-        log.info("query tag complete", n_species=len(tags), tags=tags)
-        return {"tags": tags}
+            media_path = _load_media_to_tmp(event, tmp_dir)
+            s3_bucket = source_bucket or "query"
+            s3_key = source_key or "query-file"
+
+            if is_video_path(media_path):
+                aggregated, n_frames, truncated = tag_video_path(
+                    media_path,
+                    detector=_detector,
+                    classifier=_classifier,
+                    snip_size=settings.snip_size,
+                    max_frames=settings.query_max_video_frames,
+                    s3_bucket=s3_bucket,
+                    s3_key=s3_key,
+                )
+                tags = _to_common_names(aggregated)
+                log.info(
+                    "query video tag complete",
+                    n_frames=n_frames,
+                    truncated=truncated,
+                    n_species=len(tags),
+                    tags=tags,
+                )
+            else:
+                image = _s3.decode_image(media_path)
+                result = tag_image(
+                    image_path=media_path,
+                    image=image,
+                    detector=_detector,
+                    classifier=_classifier,
+                    snip_size=settings.snip_size,
+                    s3_bucket=s3_bucket,
+                    s3_key=s3_key,
+                )
+                tags = _to_common_names(result.tags)
+                log.info("query tag complete", n_species=len(tags), tags=tags)
+
+        response = {"tags": tags}
 
     except TaggerError as exc:
         log.error("query failed", error=str(exc), error_type=type(exc).__name__)
-        return {"error": str(exc), "error_type": type(exc).__name__}
+        response = {"error": str(exc), "error_type": type(exc).__name__}
     finally:
+        if result_key and source_bucket:
+            try:
+                _s3.put_json(source_bucket, result_key, response)
+            except Exception as exc:
+                log.error("failed to write async query result", error=str(exc))
+            for artifact in (pending_key, source_key):
+                if artifact:
+                    try:
+                        _s3.delete_object(source_bucket, artifact)
+                    except Exception as exc:
+                        log.error("failed to delete query artifact", key=artifact, error=str(exc))
         structlog.contextvars.clear_contextvars()
+
+    return response

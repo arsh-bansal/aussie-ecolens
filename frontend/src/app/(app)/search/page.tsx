@@ -28,7 +28,7 @@ const MODE_LABELS: Record<SearchMode, string> = {
   species: 'By species',
   tags: 'By tags',
   thumbnail: 'By thumbnail',
-  file: 'By image',
+  file: 'By image/video',
 };
 
 function ResultCard({
@@ -224,11 +224,23 @@ function SearchView() {
     setResults(null);
     setFullImageUrl(null);
 
-    setByFileStatus('Uploading image…');
-    const t1 = setTimeout(() => setByFileStatus('Detecting species with AI…'), 700);
+    const isVideo = file.type.startsWith('video/');
+    setByFileStatus(isVideo ? 'Uploading video to storage…' : 'Uploading image to storage…');
+    const t1 = setTimeout(
+      () => setByFileStatus(
+        isVideo
+          ? 'Analyzing video frames with AI…'
+          : 'Detecting species with AI…',
+      ),
+      2500,
+    );
     const t2 = setTimeout(
-      () => setByFileStatus('Still working — the model can take ~30s on first use…'),
-      12000,
+      () => setByFileStatus(
+        isVideo
+          ? 'Analyzing video frames — this can take 1–3 minutes…'
+          : 'Still working — the model can take ~30s on first use…',
+      ),
+      isVideo ? 15000 : 12000,
     );
 
     try {
@@ -304,15 +316,15 @@ function SearchView() {
                   e.preventDefault();
                   setDragOver(false);
                   const f = e.dataTransfer.files[0];
-                  if (f && f.type.startsWith('image/')) searchByFile(f);
+                  if (f && (f.type.startsWith('image/') || f.type.startsWith('video/'))) searchByFile(f);
                 }}
               >
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={dragOver ? 'var(--ochre)' : 'var(--ink-faint)'} strokeWidth="1.5" style={{ margin: '0 auto 10px', display: 'block' }}><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 3-3 6 5"/></svg>
                 <p style={{ margin: 0, fontSize: '14.5px', color: dragOver ? 'var(--ochre)' : 'var(--ink-soft)', fontWeight: dragOver ? 700 : 400 }}>
-                  {loading ? 'Searching…' : dragOver ? 'Release to search' : 'Drop an image here, or click to browse'}
+                  {loading ? 'Searching…' : dragOver ? 'Release to search' : 'Drop an image or video here, or click to browse'}
                 </p>
-                <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--ink-faint)' }}>JPG, PNG, WEBP · finds similar detections in the observatory</p>
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) searchByFile(e.target.files[0]); }} />
+                <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--ink-faint)' }}>JPG, PNG, WEBP, MP4, MOV · finds similar detections in the observatory</p>
+                <input ref={fileRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) searchByFile(e.target.files[0]); }} />
               </div>
             ) : (
               <form onSubmit={search} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

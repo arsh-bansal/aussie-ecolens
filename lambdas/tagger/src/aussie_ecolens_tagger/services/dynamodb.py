@@ -165,14 +165,12 @@ class DynamoDBService:
             name = common_name(latin)
             common_tags[name] = common_tags.get(name, 0) + count
 
-        # thumbnail_url: deterministic thumbnail key for images; NULL for videos
-        # (videos return the full URL on query, not a thumbnail).
-        if file_type == "image":
-            thumbnail_av: dict[str, Any] = {
-                "S": f"s3://{settings.thumbnails_bucket}/{sha}.jpg"
-            }
-        else:
-            thumbnail_av = {"NULL": True}
+        # thumbnail_url: deterministic <sha>.jpg in the thumbnails bucket.
+        # Images get one from the Thumbnail Lambda; videos from frame 0 in
+        # video_handler — same key convention so the UI can preview both.
+        thumbnail_av: dict[str, Any] = {
+            "S": f"s3://{settings.thumbnails_bucket}/{sha}.jpg"
+        }
 
         tags_av = {"M": {name: {"N": str(c)} for name, c in common_tags.items()}}
 

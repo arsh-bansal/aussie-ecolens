@@ -2,8 +2,12 @@
 tagging.py — ML inference for /search/by-file.
 
 Invokes the query-tagger Lambda (container image, MegaDetector + SpeciesNet).
-Images are staged to S3 and passed by {bucket, key} to avoid base64 payload
-bloat and the 6 MB synchronous invoke limit.
+Images are staged to S3 and passed by {bucket, key} to avoid the 6 MB
+API Gateway → Lambda payload limit on multipart uploads.
+
+Video search uses async invoke + S3 result polling because API Gateway
+HTTP APIs hard-cap synchronous responses at ~30s while video ML can
+run for several minutes.
 """
 
 from __future__ import annotations
@@ -24,6 +28,9 @@ TAGGER_LAMBDA_NAME = os.environ.get("TAGGER_LAMBDA_NAME", "")
 S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME", "")
 AWS_REGION = os.environ.get("AWS_REGION_NAME") or os.environ.get("AWS_REGION", "ap-southeast-2")
 
+_VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+QUERY_RESULTS_PREFIX = "query-results/"
+
 
 def _get_lambda_client():
     global _lambda_client
@@ -31,7 +38,7 @@ def _get_lambda_client():
         _lambda_client = boto3.client(
             "lambda",
             region_name=AWS_REGION,
-            config=Config(read_timeout=120, connect_timeout=10, retries={"max_attempts": 0}),
+            config=Config(read_timeout=600, connect_timeout=10, retries={"max_attempts": 0}),
         )
     return _lambda_client
 
@@ -43,7 +50,83 @@ def _get_s3_client():
     return _s3_client
 
 
-def _invoke_tagger(bucket: str, key: str) -> dict[str, int]:
+def is_video_key(key: str) -> bool:
+    return Path(key).suffix.lower() in _VIDEO_EXTS
+
+
+def query_result_key(query_temp_key: str) -> str:
+    stem = Path(query_temp_key).name.rsplit(".", 1)[0]
+    return f"{QUERY_RESULTS_PREFIX}{stem}.json"
+
+
+def query_pending_key(query_temp_key: str) -> str:
+    stem = Path(query_temp_key).name.rsplit(".", 1)[0]
+    return f"{QUERY_RESULTS_PREFIX}{stem}.pending"
+
+
+def read_query_result(bucket: str, result_key: str) -> dict | None:
+    try:
+        obj = _get_s3_client().get_object(Bucket=bucket, Key=result_key)
+        return json.loads(obj["Body"].read().decode("utf-8"))
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+            return None
+        raise
+
+
+def pending_job_exists(bucket: str, pending_key: str) -> bool:
+    try:
+        _get_s3_client().head_object(Bucket=bucket, Key=pending_key)
+        return True
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in {"404", "NotFound", "NoSuchKey"}:
+            return False
+        raise
+
+
+def start_video_tag_job(bucket: str, key: str) -> None:
+    if not TAGGER_LAMBDA_NAME:
+        raise RuntimeError(
+            "TAGGER_LAMBDA_NAME is not set — deploy aussie-ecolens-query-tagger first."
+        )
+
+    result_key = query_result_key(key)
+    pending_key = query_pending_key(key)
+    _get_s3_client().put_object(Bucket=bucket, Key=pending_key, Body=b"processing")
+
+    payload = {
+        "bucket": bucket,
+        "key": key,
+        "result_key": result_key,
+        "pending_key": pending_key,
+    }
+    try:
+        _get_lambda_client().invoke(
+            FunctionName=TAGGER_LAMBDA_NAME,
+            InvocationType="Event",
+            Payload=json.dumps(payload).encode(),
+        )
+    except ClientError as exc:
+        _get_s3_client().delete_object(Bucket=bucket, Key=pending_key)
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in {"TooManyRequestsException", "ServiceException"}:
+            raise RuntimeError(
+                "ML tagger is warming up (cold start). Wait 30 seconds and try again."
+            ) from exc
+        raise RuntimeError(f"Failed to invoke tagger Lambda: {exc}") from exc
+
+
+def cleanup_query_artifacts(bucket: str, *keys: str) -> None:
+    for key in keys:
+        if not key:
+            continue
+        try:
+            _get_s3_client().delete_object(Bucket=bucket, Key=key)
+        except ClientError:
+            pass
+
+
+def _invoke_tagger_sync(bucket: str, key: str) -> dict[str, int]:
     if not TAGGER_LAMBDA_NAME:
         raise RuntimeError(
             "TAGGER_LAMBDA_NAME is not set — deploy aussie-ecolens-query-tagger first."
@@ -74,8 +157,16 @@ def _invoke_tagger(bucket: str, key: str) -> dict[str, int]:
     return result.get("tags", {})
 
 
+def tag_s3_object(bucket: str, key: str) -> dict[str, int]:
+    """Run query-tagger synchronously (images); delete the temp key when done."""
+    try:
+        return _invoke_tagger_sync(bucket, key)
+    finally:
+        cleanup_query_artifacts(bucket, key)
+
+
 def tag_image_file(image_path: str) -> dict[str, int]:
-    """Tag an image file via the query-tagger Lambda (S3-staged invoke)."""
+    """Upload a local file to query-temp/ then tag (legacy multipart path)."""
     if not S3_BUCKET_NAME:
         raise RuntimeError("S3_BUCKET_NAME is not set on the query API Lambda.")
 
@@ -85,13 +176,8 @@ def tag_image_file(image_path: str) -> dict[str, int]:
     with open(image_path, "rb") as f:
         image_bytes = f.read()
 
-    s3 = _get_s3_client()
-    s3.put_object(Bucket=S3_BUCKET_NAME, Key=key, Body=image_bytes)
-
-    try:
-        return _invoke_tagger(S3_BUCKET_NAME, key)
-    finally:
-        try:
-            s3.delete_object(Bucket=S3_BUCKET_NAME, Key=key)
-        except ClientError:
-            pass
+    _get_s3_client().put_object(Bucket=S3_BUCKET_NAME, Key=key, Body=image_bytes)
+    if is_video_key(key):
+        start_video_tag_job(S3_BUCKET_NAME, key)
+        raise RuntimeError("Video query started asynchronously — poll with the same key.")
+    return tag_s3_object(S3_BUCKET_NAME, key)

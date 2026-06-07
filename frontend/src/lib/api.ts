@@ -8,9 +8,13 @@ import type {
   DeleteFilesResponse,
   SubscribeRequest,
   SubscribeResponse,
+  UnsubscribeRequest,
+  UnsubscribeResponse,
   ListSubscriptionsResponse,
   FileStatusResponse,
   SearchResponse,
+  QueryFilePresignRequest,
+  QueryFilePresignResponse,
   TagSearchRequest,
   SpeciesSearchRequest,
   ThumbnailLookupRequest,
@@ -71,6 +75,30 @@ function queryApi<T>(path: string, options?: RequestInit) {
   return request<T>(`${QUERY_BASE}${path}`, options);
 }
 
+function putToPresignedUrl(
+  presignedUrl: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", presignedUrl);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable)
+          onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`S3 upload failed: ${xhr.status}`));
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.send(file);
+  });
+}
+
 export const api = {
   // ── Upload/auth API (presign, subscribe) ──────────────────────────────────
   presign: (body: PresignRequest) =>
@@ -89,6 +117,12 @@ export const api = {
 
   subscribe: (body: SubscribeRequest) =>
     queryApi<SubscribeResponse>("/tags/subscribe", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  unsubscribe: (body: UnsubscribeRequest) =>
+    queryApi<UnsubscribeResponse>("/tags/unsubscribe", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -133,67 +167,84 @@ export const api = {
 
   async searchByFile(file: File, signal?: AbortSignal): Promise<SearchResponse> {
     const token = await getIdToken();
+    const isVideo = file.type.startsWith("video/");
 
-    const attempt = async () => {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`${QUERY_BASE}/search/by-file`, {
+    const runQuery = async (key: string): Promise<SearchResponse> => {
+      const maxPolls = isVideo ? 120 : 1;
+      for (let poll = 0; poll < maxPolls; poll++) {
+        const res = await fetch(`${QUERY_BASE}/search/by-file`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ key }),
+          signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 202) {
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
+        if (!res.ok) {
+          const err = data as { error?: string | { message?: string } };
+          const message =
+            typeof err?.error === "string"
+              ? err.error
+              : err?.error?.message ??
+                (res.status === 503
+                  ? "ML model is warming up — wait 30 seconds and try again."
+                  : `Request failed with status ${res.status}`);
+          const error = new Error(message);
+          (error as Error & { retriable?: boolean }).retriable = res.status === 503;
+          throw error;
+        }
+        return data as SearchResponse;
+      }
+      throw new Error(
+        "Video analysis is still running — wait a minute and try the same file again.",
+      );
+    };
+
+    const attempt = async (): Promise<SearchResponse> => {
+      const presignRes = await fetch(`${QUERY_BASE}/search/by-file/presign`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content_type: file.type || "image/jpeg",
+          size_bytes: file.size,
+        } satisfies QueryFilePresignRequest),
         signal,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const err = data as { error?: string | { message?: string } };
-        const message =
+      const presignData = await presignRes.json().catch(() => ({}));
+      if (!presignRes.ok) {
+        const err = presignData as { error?: string };
+        throw new Error(
           typeof err?.error === "string"
             ? err.error
-            : err?.error?.message ??
-              (res.status === 503
-                ? "ML model is warming up — wait 30 seconds and try again."
-                : `Request failed with status ${res.status}`);
-        const error = new Error(message);
-        (error as Error & { retriable?: boolean }).retriable = res.status === 503;
-        throw error;
+            : `Presign failed with status ${presignRes.status}`,
+        );
       }
-      return data as SearchResponse;
+
+      const presign = presignData as QueryFilePresignResponse;
+      await putToPresignedUrl(presign.presigned_url, file);
+      return runQuery(presign.key);
     };
 
     try {
       return await attempt();
     } catch (e) {
       const err = e as Error & { retriable?: boolean };
-      // Don't retry if the caller aborted.
       if (err.retriable && !signal?.aborted) {
-        await new Promise(r => setTimeout(r, 8000));
+        await new Promise((r) => setTimeout(r, 8000));
         return await attempt();
       }
       throw e;
     }
   },
 
-  uploadToPresignedUrl(
-    presignedUrl: string,
-    file: File,
-    onProgress?: (pct: number) => void,
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", presignedUrl);
-      xhr.setRequestHeader("Content-Type", file.type);
-      if (onProgress) {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable)
-            onProgress(Math.round((e.loaded / e.total) * 100));
-        };
-      }
-      xhr.onload = () =>
-        xhr.status >= 200 && xhr.status < 300
-          ? resolve()
-          : reject(new Error(`S3 upload failed: ${xhr.status}`));
-      xhr.onerror = () => reject(new Error("Network error during upload"));
-      xhr.send(file);
-    });
-  },
+  uploadToPresignedUrl: putToPresignedUrl,
 };

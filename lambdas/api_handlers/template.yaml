@@ -85,7 +85,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${AppName}-query-api"
-      Timeout: 120
+      Timeout: 600
       MemorySize: 1024
       CodeUri: ./
       Handler: lambda_handler.handler
@@ -118,6 +118,7 @@ Resources:
               Action:
                 - sns:GetSubscriptionAttributes
                 - sns:SetSubscriptionAttributes
+                - sns:Unsubscribe
               Resource: "*"
       Events:
         # Single catch-all: every path + method forwards to Flask, which owns

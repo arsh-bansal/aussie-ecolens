@@ -86,6 +86,30 @@ def _tags_from_filter_policy(arn: str) -> list[str]:
     return species
 
 
+def _remove_tag_from_filter(arn: str, tag: str) -> bool:
+    """Remove `tag` from the species filter. Returns True if subscription removed."""
+    attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
+    policy_raw = attrs.get("FilterPolicy")
+    policy = json.loads(policy_raw) if policy_raw else {}
+
+    species = policy.get(_SPECIES_ATTRIBUTE, [])
+    if not isinstance(species, list):
+        species = [species] if species else []
+
+    species = [s for s in species if s != tag]
+    if not species:
+        _sns.unsubscribe(SubscriptionArn=arn)
+        return True
+
+    policy[_SPECIES_ATTRIBUTE] = species
+    _sns.set_subscription_attributes(
+        SubscriptionArn=arn,
+        AttributeName="FilterPolicy",
+        AttributeValue=json.dumps(policy),
+    )
+    return False
+
+
 def _add_tag_to_filter(arn: str, tag: str) -> None:
     """Merge `tag` into the species list of an existing subscription's policy."""
     attrs = _sns.get_subscription_attributes(SubscriptionArn=arn).get("Attributes", {})
@@ -192,6 +216,74 @@ def subscribe():
             Attributes={"FilterPolicy": json.dumps({_SPECIES_ATTRIBUTE: [tag]})},
         )
         return jsonify({"status": "pending_confirmation", "tag": tag, "email": email}), 200
+
+    except (ClientError, BotoCoreError) as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@subscribe_bp.route("/tags/unsubscribe", methods=["POST"])
+@require_auth
+def unsubscribe():
+    """Remove one species from the user's SNS filter, or unsubscribe entirely.
+
+    Body: {"tag": "Red Fox"}  — stop alerts for that species only
+      or  {"all": true}       — cancel the SNS email subscription (same as the
+                                link in AWS notification emails)
+    """
+    if not _TOPIC_ARN:
+        return jsonify({"error": "Alerts are not configured (no SNS topic)"}), 500
+
+    body = request.get_json(silent=True) or {}
+    email = getattr(request, "user_email", None)
+    if not email:
+        return jsonify({"error": "No email on your account"}), 400
+
+    try:
+        arn, pending = _find_email_subscription(email)
+        if pending:
+            return jsonify({
+                "error": "Confirm the SNS subscription email before managing alerts.",
+            }), 400
+        if not arn:
+            return jsonify({"status": "none", "email": email}), 200
+
+        if body.get("all"):
+            _sns.unsubscribe(SubscriptionArn=arn)
+            return jsonify({
+                "status": "unsubscribed_all",
+                "email": email,
+                "message": "All species alerts cancelled via AWS SNS.",
+            }), 200
+
+        raw_tag = (body.get("tag") or "").strip()
+        if not raw_tag:
+            return jsonify({"error": "Provide 'tag' or {\"all\": true}"}), 400
+
+        tag = resolve_species(raw_tag)
+        if not tag:
+            return jsonify({
+                "error": f"Unknown species '{raw_tag}'.",
+                "valid_species": list(CANONICAL_SPECIES),
+            }), 400
+
+        current = _tags_from_filter_policy(arn)
+        if tag not in current:
+            return jsonify({
+                "status": "not_subscribed",
+                "tag": tag,
+                "email": email,
+            }), 200
+
+        removed_all = _remove_tag_from_filter(arn, tag)
+        if removed_all:
+            return jsonify({
+                "status": "unsubscribed_all",
+                "tag": tag,
+                "email": email,
+                "message": "Last alert removed — SNS email subscription cancelled.",
+            }), 200
+
+        return jsonify({"status": "unsubscribed", "tag": tag, "email": email}), 200
 
     except (ClientError, BotoCoreError) as e:
         return jsonify({"error": str(e)}), 500
