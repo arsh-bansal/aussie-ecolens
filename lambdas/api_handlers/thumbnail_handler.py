@@ -1,7 +1,7 @@
 """
 POST /search/by-thumbnail — renamed from GET /thumbnail
 Body: {"thumbnail_url": "s3://..."}
-Response: {"url": "<full-size s3_url>"}
+Response: {"url": "<full-size s3_url>", "file_type": "image" | "video"}
 """
 
 from flask import Blueprint, request, jsonify
@@ -31,4 +31,7 @@ def get_thumbnail():
     if doc is None:
         return jsonify({"error": "Thumbnail not found"}), 404
 
-    return jsonify({"url": presign_s3_uri(doc.get("s3_url"))}), 200
+    return jsonify({
+        "url": presign_s3_uri(doc.get("s3_url")),
+        "file_type": doc.get("file_type"),
+    }), 200

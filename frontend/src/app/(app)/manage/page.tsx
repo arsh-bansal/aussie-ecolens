@@ -29,6 +29,7 @@ export default function ManagePage() {
   const [tagging, setTagging] = useState(false);
   const [filter, setFilter] = useState('');
   const [bulkTag, setBulkTag] = useState('');
+  const [bulkCount, setBulkCount] = useState(1);
   const [tagInput, setTagInput] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -112,9 +113,25 @@ export default function ManagePage() {
     }
   };
 
-  const addTag = async (record: SearchResult, tag: string) => {
-    if (!tag.trim()) return;
-    await modifyTags([record.url], [tag.trim()], 1);
+  // Parse a single per-row tag entry. Supports "name:N" syntax to add N copies
+  // in one go (e.g. "helo:3" → ["helo","helo","helo"], which the backend sums
+  // into count 3). Plain "name" → ["name"] (count 1, today's behaviour).
+  const parseTagEntry = (raw: string): { tag: string; count: number } | null => {
+    const s = raw.trim();
+    if (!s) return null;
+    const m = s.match(/^(.+?):(\d+)$/);
+    if (m) {
+      const n = parseInt(m[2], 10);
+      if (n >= 1 && n <= 99) return { tag: m[1].trim(), count: n };
+    }
+    return { tag: s, count: 1 };
+  };
+
+  const addTag = async (record: SearchResult, raw: string) => {
+    const parsed = parseTagEntry(raw);
+    if (!parsed) return;
+    const tags = Array(parsed.count).fill(parsed.tag);
+    await modifyTags([record.url], tags, 1);
     setTagInput(prev => ({ ...prev, [record.file_id]: '' }));
   };
 
@@ -122,7 +139,12 @@ export default function ManagePage() {
     await modifyTags([record.url], [tag], 0);
   };
 
-  const bulkAddTag = () => modifyTags(selectedUrls(), [bulkTag.trim()], 1);
+  const bulkAddTag = () => {
+    const tag = bulkTag.trim();
+    if (!tag) return;
+    const n = Math.max(1, Math.min(99, bulkCount || 1));
+    modifyTags(selectedUrls(), Array(n).fill(tag), 1);
+  };
   const bulkRemoveTag = () => modifyTags(selectedUrls(), [bulkTag.trim()], 0);
 
   const topTag = (r: SearchResult) => Object.entries(r.tags ?? {}).sort((a, b) => b[1] - a[1])[0];
@@ -207,8 +229,20 @@ export default function ManagePage() {
               onChange={e => setBulkTag(e.target.value)}
               style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', padding: '6px 10px', color: 'var(--ink)', minWidth: '140px' }}
             />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--ink-soft)' }}>
+              ×
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={bulkCount}
+                onChange={e => setBulkCount(parseInt(e.target.value, 10) || 1)}
+                title="How many times to add this tag (count in the tags map)"
+                style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', padding: '6px 8px', color: 'var(--ink)', width: '64px' }}
+              />
+            </label>
             <button className="btn btn-ghost btn-sm" onClick={bulkAddTag} disabled={tagging || !bulkTag.trim()}>
-              {tagging ? 'Saving…' : 'Add tag'}
+              {tagging ? 'Saving…' : `Add tag${bulkCount > 1 ? ` ×${bulkCount}` : ''}`}
             </button>
             <button className="btn btn-ghost btn-sm" onClick={bulkRemoveTag} disabled={tagging || !bulkTag.trim()}>
               Remove tag
@@ -288,9 +322,10 @@ export default function ManagePage() {
                         ))}
                         <input
                           type="text"
-                          placeholder="+ tag"
+                          placeholder="+ tag or tag:N"
+                          title="Add a tag — use 'name:N' to add N copies (e.g. helo:3 → count 3)"
                           value={tagInput[r.file_id] ?? ''}
-                          size={Math.max(6, (tagInput[r.file_id]?.length ?? 0) + 2)}
+                          size={Math.max(16, (tagInput[r.file_id]?.length ?? 0) + 2)}
                           onChange={e => setTagInput(prev => ({ ...prev, [r.file_id]: e.target.value }))}
                           onKeyDown={e => e.key === 'Enter' && addTag(r, tagInput[r.file_id] ?? '')}
                           style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'transparent', border: '1px dashed var(--ochre-soft)', borderRadius: '999px', padding: '2px 8px', color: 'var(--ochre)', minWidth: '60px', maxWidth: '280px', outline: 'none' }}

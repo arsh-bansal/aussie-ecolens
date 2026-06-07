@@ -4,25 +4,11 @@ import { useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { SPECIES_OPTIONS } from '@/lib/species';
 import Modal from '@/components/ui/Modal';
 import type { SearchResult } from '@/types';
 
 type SearchMode = 'species' | 'tags' | 'thumbnail' | 'file';
-
-const SPECIES_OPTIONS = [
-  'Agile Antechinus', 'Australian Brushturkey', 'Australian Magpie',
-  'Bar-shouldered Dove', 'Black Rat', 'Bush Rat', 'Bush Stone-curlew',
-  'Cattle', 'Chowchilla', 'Common Brushtail Possum', 'Common Wombat', 'Dingo',
-  'Domestic Cat', 'Domestic Dog', 'Eastern Grey Kangaroo', 'Eastern Yellow Robin',
-  'European Hare', 'European Rabbit', 'Fallow Deer', 'Giant White-tailed Rat',
-  'Goat', 'Grey Shrikethrush', 'Grey-headed Robin', 'House Mouse', 'Human',
-  'Lace Monitor', 'Laughing Kookaburra', 'Long-nosed Bandicoot',
-  'Mountain Brushtail Possum', 'Musky Rat-kangaroo', 'Noisy Pitta',
-  'Northern Brown Bandicoot', 'Orange-footed Scrubfowl', 'Pacific Emerald Dove',
-  'Pied Currawong', 'Rat (genus)', 'Red Fox', 'Red-legged Pademelon',
-  'Red-necked Wallaby', 'Short-beaked Echidna', 'Southern Cassowary',
-  'Superb Lyrebird', 'Swamp Wallaby', 'White-winged Chough', 'Wild Pig',
-];
 
 const MODE_LABELS: Record<SearchMode, string> = {
   species: 'By species',
@@ -97,6 +83,7 @@ function SearchView() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [fullImageType, setFullImageType] = useState<'image' | 'video' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -123,6 +110,7 @@ function SearchView() {
     setLoading(true);
     setError(null);
     setFullImageUrl(null);
+    setFullImageType(null);
     setResults(null);
     try {
       const terms = term.split(',').map(s => s.trim()).filter(Boolean);
@@ -136,6 +124,7 @@ function SearchView() {
       } else if (activeMode === 'thumbnail') {
         const res = await api.searchByThumbnail({ thumbnail_url: term.trim() });
         setFullImageUrl(res.url);
+        setFullImageType(res.file_type === 'video' ? 'video' : 'image');
       }
     } catch (err: unknown) {
       if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return; // cancelled — leave state as-is
@@ -209,6 +198,7 @@ function SearchView() {
     setMode(m);
     setResults(null);
     setFullImageUrl(null);
+    setFullImageType(null);
     setError(null);
     setCopied(false);
     setQuery('');
@@ -223,6 +213,7 @@ function SearchView() {
     setError(null);
     setResults(null);
     setFullImageUrl(null);
+    setFullImageType(null);
 
     const isVideo = file.type.startsWith('video/');
     setByFileStatus(isVideo ? 'Uploading video to storage…' : 'Uploading image to storage…');
@@ -265,6 +256,7 @@ function SearchView() {
         setQuery(url);
         setResults(null);
         setFullImageUrl(null);
+        setFullImageType(null);
         setError(null);
       }
       setCopied(true);
@@ -391,12 +383,16 @@ function SearchView() {
         {fullImageUrl && !loading && mode === 'thumbnail' && (
           <div className="panel">
             <div className="panel-head">
-              <h3>Full-size image</h3>
+              <h3>{fullImageType === 'video' ? 'Full-size video' : 'Full-size image'}</h3>
               <span style={{ fontSize: '12.5px', color: 'var(--euc-deep)' }}>Thumbnail lookup succeeded</span>
             </div>
             <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={fullImageUrl} alt="Full-size from thumbnail lookup" style={{ width: '100%', maxHeight: '520px', objectFit: 'contain', borderRadius: 'var(--r-md)', background: 'var(--sand-200)' }} />
+              {fullImageType === 'video' ? (
+                <video src={fullImageUrl} controls style={{ width: '100%', maxHeight: '520px', borderRadius: 'var(--r-md)', background: '#000' }} />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={fullImageUrl} alt="Full-size from thumbnail lookup" style={{ width: '100%', maxHeight: '520px', objectFit: 'contain', borderRadius: 'var(--r-md)', background: 'var(--sand-200)' }} />
+              )}
               <a href={fullImageUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
                 Open original in new tab
               </a>

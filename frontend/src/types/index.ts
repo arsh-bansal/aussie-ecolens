@@ -133,6 +133,7 @@ export interface ThumbnailLookupRequest {
 
 export interface ThumbnailLookupResponse {
   url: string;
+  file_type?: FileType;
 }
 
 export interface AuthUser {
