@@ -188,13 +188,11 @@ scripts/                CORS update and utility scripts
 - Video processing is consolidated inside the Tagger Lambda (no separate splitter/aggregator Lambdas).
 - Search results are eventually consistent after mutations (~1–2 s replication lag).
 - ML models are CPU-only PyTorch builds sized for Lambda container limits.
-- `docs/setup.md` still references `azure_functions/` deploy steps from the original plan; use `lambdas/api_handlers/deploy.sh` instead.
 
 ## Future Improvements
 
 - Export architecture diagram with official AWS + Azure icons for the team report
 - User testing guide for submission
-- Consolidate outdated docs (`docs/setup.md`, `docs/architecture.md` Azure Functions references)
 - Application Insights on Azure for cross-cloud tracing
 - Model hot-swap via S3 version paths without Lambda redeploy
 
