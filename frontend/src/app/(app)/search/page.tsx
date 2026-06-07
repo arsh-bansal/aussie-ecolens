@@ -1,16 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import Modal from '@/components/ui/Modal';
 import type { SearchResult } from '@/types';
 
-type SearchMode = 'species' | 'tags' | 'file';
+type SearchMode = 'species' | 'tags' | 'thumbnail' | 'file';
 
-// Canonical species names recognised by the backend (mirrors the Tagger
-// taxonomy via species_catalog). Offered as autocomplete so searches use names
-// that can actually match stored tags. The API also resolves common synonyms.
 const SPECIES_OPTIONS = [
   'Agile Antechinus', 'Australian Brushturkey', 'Australian Magpie',
   'Bar-shouldered Dove', 'Black Rat', 'Bush Rat', 'Bush Stone-curlew',
@@ -26,7 +24,22 @@ const SPECIES_OPTIONS = [
   'Superb Lyrebird', 'Swamp Wallaby', 'White-winged Chough', 'Wild Pig',
 ];
 
-function ResultCard({ r, onOpen }: { r: SearchResult; onOpen: () => void }) {
+const MODE_LABELS: Record<SearchMode, string> = {
+  species: 'By species',
+  tags: 'By tags',
+  thumbnail: 'By thumbnail',
+  file: 'By image',
+};
+
+function ResultCard({
+  r,
+  onOpen,
+  onCopyThumbnail,
+}: {
+  r: SearchResult;
+  onOpen: () => void;
+  onCopyThumbnail?: () => void;
+}) {
   const topTag = Object.entries(r.tags ?? {}).sort((a, b) => b[1] - a[1])[0];
   const species = topTag?.[0] ?? 'Unknown species';
   const conf = topTag?.[1] ?? 0;
@@ -51,6 +64,16 @@ function ResultCard({ r, onOpen }: { r: SearchResult; onOpen: () => void }) {
         <span style={{ position: 'absolute', bottom: '10px', right: '10px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '999px', background: 'oklch(0.08 0.02 50 / 0.7)', color: '#fff' }}>
           {conf}×
         </span>
+        {r.thumbnail_url && onCopyThumbnail && (
+          <button
+            type="button"
+            title="Copy thumbnail URL for lookup"
+            onClick={e => { e.stopPropagation(); onCopyThumbnail(); }}
+            style={{ position: 'absolute', top: '8px', right: '8px', padding: '4px 8px', borderRadius: '6px', border: 'none', background: 'oklch(0.08 0.02 50 / 0.75)', color: '#fff', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Copy URL
+          </button>
+        )}
       </div>
       <div style={{ padding: '14px 16px 16px' }}>
         <div style={{ fontWeight: 700, fontSize: '15px' }}>{species}</div>
@@ -68,47 +91,174 @@ function ResultCard({ r, onOpen }: { r: SearchResult; onOpen: () => void }) {
   );
 }
 
-export default function SearchPage() {
+function SearchView() {
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<SearchMode>('species');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<SearchResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Progress message for the by-file search (the ML run can take 15-40s on a
+  // cold start). Drives an informative loading state instead of a bare spinner.
+  const [byFileStatus, setByFileStatus] = useState<string | null>(null);
+  // In-flight request, so a Cancel button can abort it.
+  const abortRef = useRef<AbortController | null>(null);
+  // Mode the user is trying to switch to while a search is running or results
+  // are on screen — held until they confirm the discard in the modal.
+  const [pendingMode, setPendingMode] = useState<SearchMode | null>(null);
+  const restoredRef = useRef(false);
 
-  const search = async (e?: React.FormEvent) => {
+  const search = async (e?: React.FormEvent, termArg?: string, modeArg?: SearchMode) => {
     e?.preventDefault();
+    const term = termArg ?? query;
+    const activeMode = modeArg ?? mode;
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     setLoading(true);
     setError(null);
+    setFullImageUrl(null);
+    setResults(null);
     try {
-      let res;
-      const terms = query.split(',').map(s => s.trim()).filter(Boolean);
-      if (mode === 'species') {
-        res = await api.searchBySpecies({ species: terms });
-      } else {
+      const terms = term.split(',').map(s => s.trim()).filter(Boolean);
+      if (activeMode === 'species') {
+        const res = await api.searchBySpecies({ species: terms }, ac.signal);
+        setResults(res.results);
+      } else if (activeMode === 'tags') {
         const tagMap = Object.fromEntries(terms.map(t => [t, 1]));
-        res = await api.searchByTags({ tags: tagMap });
+        const res = await api.searchByTags({ tags: tagMap }, ac.signal);
+        setResults(res.results);
+      } else if (activeMode === 'thumbnail') {
+        const res = await api.searchByThumbnail({ thumbnail_url: term.trim() });
+        setFullImageUrl(res.url);
       }
-      setResults(res.results);
     } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return; // cancelled — leave state as-is
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
-      setLoading(false);
+      if (abortRef.current === ac) { abortRef.current = null; setLoading(false); }
     }
   };
 
+  // Restore a previous search (results + query + mode) from sessionStorage so
+  // navigating away and back doesn't lose results — no need to re-run the
+  // (slow) search. Runs once, and only if there's no ?q= driving a fresh search.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (searchParams.get('q')) return; // a fresh navbar search takes precedence
+    try {
+      const saved = sessionStorage.getItem('search:last');
+      if (!saved) return;
+      const s = JSON.parse(saved) as { mode?: SearchMode; query?: string; results?: SearchResult[] };
+      if (s.mode) setMode(s.mode);
+      if (typeof s.query === 'string') setQuery(s.query);
+      if (Array.isArray(s.results)) setResults(s.results);
+    } catch { /* ignore corrupt cache */ }
+  }, [searchParams]);
+
+  // Persist results so they survive navigation. Cleared only when results are
+  // explicitly reset (new search / discard).
+  useEffect(() => {
+    try {
+      if (results) {
+        sessionStorage.setItem('search:last', JSON.stringify({ mode, query, results }));
+      } else {
+        sessionStorage.removeItem('search:last');
+      }
+    } catch { /* sessionStorage unavailable — non-fatal */ }
+  }, [results, mode, query]);
+
+  // Run an incoming ?q= search (from the dashboard navbar). The navbar searches
+  // by species, so prefill the species tab and auto-run with the term directly
+  // (passed explicitly to avoid stale state on first render).
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (!q) return;
+    setQuery(q);
+    setMode('species');
+    search(undefined, q, 'species');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // True when switching mode would lose something (a running search or any
+  // results on screen, including an explicit empty result set).
+  const hasUnsavedSearch = loading || results !== null || fullImageUrl !== null;
+
+  const cancelSearch = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setByFileStatus(null);
+    setLoading(false);
+  };
+
+  // Mode-tab click: if a search is running or results are shown, confirm first.
+  const requestMode = (m: SearchMode) => {
+    if (m === mode) return;
+    if (hasUnsavedSearch) { setPendingMode(m); return; }
+    applyMode(m);
+  };
+
+  const applyMode = (m: SearchMode) => {
+    cancelSearch();
+    setMode(m);
+    setResults(null);
+    setFullImageUrl(null);
+    setError(null);
+    setCopied(false);
+    setQuery('');
+    setPendingMode(null);
+  };
+
   const searchByFile = async (file: File) => {
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     setLoading(true);
     setError(null);
+    setResults(null);
+    setFullImageUrl(null);
+
+    setByFileStatus('Uploading image…');
+    const t1 = setTimeout(() => setByFileStatus('Detecting species with AI…'), 700);
+    const t2 = setTimeout(
+      () => setByFileStatus('Still working — the model can take ~30s on first use…'),
+      12000,
+    );
+
     try {
-      const res = await api.searchByFile(file);
+      const res = await api.searchByFile(file, ac.signal);
       setResults(res.results);
     } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return; // cancelled
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
-      setLoading(false);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      setByFileStatus(null);
+      if (abortRef.current === ac) { abortRef.current = null; setLoading(false); }
+    }
+  };
+
+  const copyThumbnailUrl = async (url: string, openThumbnailTab = false) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      if (openThumbnailTab) {
+        setMode('thumbnail');
+        setQuery(url);
+        setResults(null);
+        setFullImageUrl(null);
+        setError(null);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError('Could not copy to clipboard');
     }
   };
 
@@ -126,39 +276,17 @@ export default function SearchPage() {
       </header>
 
       <div className="page">
-        {/* Search bar */}
         <div className="panel" style={{ marginBottom: '22px' }}>
           <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Mode toggle */}
             <div className="tag-toggle">
-              {(['species', 'tags', 'file'] as SearchMode[]).map(m => (
-                <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); setResults(null); setError(null); }}>
-                  {m === 'species' ? 'By species' : m === 'tags' ? 'By tags' : 'By image'}
+              {(['species', 'tags', 'thumbnail', 'file'] as SearchMode[]).map(m => (
+                <button key={m} className={mode === m ? 'on' : ''} onClick={() => requestMode(m)}>
+                  {MODE_LABELS[m]}
                 </button>
               ))}
             </div>
 
-            {mode !== 'file' ? (
-              <form onSubmit={search} style={{ display: 'flex', gap: '12px' }}>
-                <div className="topbar-search" style={{ flex: 1, minWidth: 0, margin: 0 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" strokeLinecap="round"/></svg>
-                  <input
-                    placeholder={mode === 'species' ? 'e.g. Red Fox, Southern Cassowary' : 'e.g. Cattle, Dingo'}
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    list={mode === 'species' ? 'species-options' : undefined}
-                  />
-                  {mode === 'species' && (
-                    <datalist id="species-options">
-                      {SPECIES_OPTIONS.map(s => <option key={s} value={s} />)}
-                    </datalist>
-                  )}
-                </div>
-                <button className="btn btn-primary" type="submit" disabled={loading || !query.trim()}>
-                  {loading ? 'Searching…' : 'Search'}
-                </button>
-              </form>
-            ) : (
+            {mode === 'file' ? (
               <div
                 style={{
                   border: `2px dashed ${dragOver ? 'var(--ochre)' : 'var(--line)'}`,
@@ -186,24 +314,84 @@ export default function SearchPage() {
                 <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--ink-faint)' }}>JPG, PNG, WEBP · finds similar detections in the observatory</p>
                 <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) searchByFile(e.target.files[0]); }} />
               </div>
+            ) : (
+              <form onSubmit={search} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div className="topbar-search" style={{ flex: 1, minWidth: 0, margin: 0 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" strokeLinecap="round"/></svg>
+                    <input
+                      placeholder={
+                        mode === 'species'
+                          ? 'e.g. Red Fox, Southern Cassowary'
+                          : mode === 'tags'
+                          ? 'e.g. Domestic Cat, demoooo'
+                          : 'Paste thumbnail URL (https://… or s3://…)'
+                      }
+                      value={query}
+                      onChange={e => setQuery(e.target.value)}
+                      list={mode === 'species' ? 'species-options' : undefined}
+                    />
+                    {mode === 'species' && (
+                      <datalist id="species-options">
+                        {SPECIES_OPTIONS.map(s => <option key={s} value={s} />)}
+                      </datalist>
+                    )}
+                  </div>
+                  <button className="btn btn-primary" type="submit" disabled={loading || !query.trim()}>
+                    {loading ? 'Searching…' : mode === 'thumbnail' ? 'Resolve' : 'Search'}
+                  </button>
+                </div>
+                {mode === 'thumbnail' && (
+                  <p style={{ fontSize: '12.5px', color: 'var(--ink-faint)', margin: 0 }}>
+                    Paste a thumbnail URL from search results (use <strong>Copy URL</strong> on a result card), or an <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px' }}>s3://</code> URI. Returns the full-size image.
+                  </p>
+                )}
+              </form>
             )}
           </div>
         </div>
 
-        {/* Error */}
+        {copied && (
+          <div style={{ padding: '10px 14px', borderRadius: 'var(--r-md)', background: 'var(--euc-tint)', color: 'var(--euc-deep)', fontSize: '13px', marginBottom: '16px' }}>
+            Thumbnail URL copied{mode === 'thumbnail' ? ' — click Resolve to load the full-size image.' : '.'}
+          </div>
+        )}
+
         {error && (
           <div style={{ padding: '14px 18px', borderRadius: 'var(--r-md)', background: 'var(--clay-soft)', color: 'var(--clay)', fontSize: '14px', marginBottom: '20px' }}>{error}</div>
         )}
 
-        {/* Loading */}
         {loading && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px 0' }}>
             <div style={{ width: '32px', height: '32px', border: '3px solid var(--line)', borderTopColor: 'var(--ochre)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            {byFileStatus && (
+              <div role="status" aria-live="polite" style={{ fontSize: '14px', color: 'var(--ink-soft)', textAlign: 'center', maxWidth: '320px' }}>
+                {byFileStatus}
+              </div>
+            )}
+            <button className="btn btn-ghost btn-sm" type="button" onClick={cancelSearch}>
+              Cancel
+            </button>
           </div>
         )}
 
-        {/* Results */}
+        {fullImageUrl && !loading && mode === 'thumbnail' && (
+          <div className="panel">
+            <div className="panel-head">
+              <h3>Full-size image</h3>
+              <span style={{ fontSize: '12.5px', color: 'var(--euc-deep)' }}>Thumbnail lookup succeeded</span>
+            </div>
+            <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={fullImageUrl} alt="Full-size from thumbnail lookup" style={{ width: '100%', maxHeight: '520px', objectFit: 'contain', borderRadius: 'var(--r-md)', background: 'var(--sand-200)' }} />
+              <a href={fullImageUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+                Open original in new tab
+              </a>
+            </div>
+          </div>
+        )}
+
         {results && !loading && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
@@ -218,22 +406,28 @@ export default function SearchPage() {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px' }}>
-                {results.map(r => <ResultCard key={r.file_id} r={r} onOpen={() => setSelected(r)} />)}
+                {results.map(r => (
+                  <ResultCard
+                    key={r.file_id}
+                    r={r}
+                    onOpen={() => setSelected(r)}
+                    onCopyThumbnail={r.thumbnail_url ? () => copyThumbnailUrl(r.thumbnail_url!, true) : undefined}
+                  />
+                ))}
               </div>
             )}
           </>
         )}
 
-        {/* Empty state */}
-        {!results && !loading && !error && (
+        {!results && !fullImageUrl && !loading && !error && (
           <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--ink-faint)', fontSize: '15px' }}>
-            Enter a species name or tag to search the observatory.
+            {mode === 'thumbnail'
+              ? 'Paste a thumbnail URL to resolve the full-size image.'
+              : 'Enter a species name, tag, or upload an image to search the observatory.'}
           </div>
         )}
       </div>
 
-      {/* Full-size lightbox: clicking a result requests the full-size media
-          (rubric 4.3 — thumbnails preview, click for full-size). */}
       <Modal
         open={!!selected}
         onClose={() => setSelected(null)}
@@ -249,12 +443,51 @@ export default function SearchPage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={selected.url} alt="Full-size detection" style={{ width: '100%', height: 'auto', borderRadius: 'var(--r-md)' }} />
             )}
-            <a href={selected.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
-              Open original in new tab
-            </a>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <a href={selected.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">
+                Open original in new tab
+              </a>
+              {selected.thumbnail_url && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => copyThumbnailUrl(selected.thumbnail_url!, true)}>
+                  Copy thumbnail URL
+                </button>
+              )}
+            </div>
           </div>
         )}
       </Modal>
+
+      {/* Confirm before switching mode when it would discard a running search
+          or current results. */}
+      <Modal
+        open={pendingMode !== null}
+        onClose={() => setPendingMode(null)}
+        title={loading ? 'Cancel the current search?' : 'Clear these results?'}
+        description={
+          loading
+            ? 'Switching tabs will stop the search that’s running. Continue?'
+            : 'Switching tabs will clear the results shown. You’ll need to search again to get them back. Continue?'
+        }
+      >
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-ghost" type="button" onClick={() => setPendingMode(null)}>
+            Stay here
+          </button>
+          <button className="btn btn-primary" type="button" onClick={() => pendingMode && applyMode(pendingMode)}>
+            {loading ? 'Stop & switch' : 'Switch & clear'}
+          </button>
+        </div>
+      </Modal>
     </>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary under static export (output:
+// 'export'); wrap the view so the build doesn't bail.
+export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchView />
+    </Suspense>
   );
 }

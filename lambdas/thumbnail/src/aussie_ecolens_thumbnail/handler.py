@@ -39,6 +39,20 @@ log = get_logger(__name__)
 # Reused across warm invocations.
 _s3 = S3Service(region_name=settings.aws_region)
 
+# Search-by-image stages its transient query photo under this reserved prefix in
+# the SHARED uploads bucket (see api_handlers/tagging.py) and deletes it straight
+# after tagging. This Lambda watches the whole bucket via EventBridge, which
+# cannot express "suffix .jpg AND NOT prefix query-temp/" in a single pattern, so
+# the prefix must be skipped in code. Otherwise the query image would parse as
+# user_id="query-temp" and leave an orphan thumbnail object behind (a persisted
+# query file — assignment 4.3 forbids that). Mirrors the tagger's guard.
+QUERY_TEMP_PREFIX = "query-temp/"
+
+
+def _is_query_temp_key(key: str) -> bool:
+    """True for transient search-by-image keys that must never be thumbnailed."""
+    return key.startswith(QUERY_TEMP_PREFIX)
+
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Generate thumbnails for the image(s) referenced by the event.
@@ -64,6 +78,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 def _process_one(bucket: str, key: str) -> dict[str, Any]:
     """Thumbnail one uploaded object. Returns a per-object summary dict."""
     structlog.contextvars.bind_contextvars(src_bucket=bucket, src_key=key)
+
+    # Skip transient search-by-image uploads — never thumbnail or persist them.
+    if _is_query_temp_key(key):
+        log.info("skipping transient query image (search-by-image)")
+        return {"key": key, "skipped": "query-temp"}
 
     # Skip non-images: videos are handled by the video splitter, not here.
     if not is_image_key(key):

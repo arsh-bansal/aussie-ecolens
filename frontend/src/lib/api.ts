@@ -8,6 +8,7 @@ import type {
   DeleteFilesResponse,
   SubscribeRequest,
   SubscribeResponse,
+  ListSubscriptionsResponse,
   FileStatusResponse,
   SearchResponse,
   TagSearchRequest,
@@ -83,6 +84,9 @@ export const api = {
   // search), not the upload/auth API — so they route through queryApi(), not
   // aws(). subscribe lives on the query API (/tags/subscribe), so it must use
   // QUERY_BASE; otherwise pointing AWS_BASE at Adam's upload API would 404 it.
+  listSubscriptions: () =>
+    queryApi<ListSubscriptionsResponse>("/tags/subscribe", { method: "GET" }),
+
   subscribe: (body: SubscribeRequest) =>
     queryApi<SubscribeResponse>("/tags/subscribe", {
       method: "POST",
@@ -107,16 +111,18 @@ export const api = {
   listFiles: () =>
     queryApi<SearchResponse>("/files/list", { method: "GET" }),
 
-  searchByTags: (body: TagSearchRequest) =>
+  searchByTags: (body: TagSearchRequest, signal?: AbortSignal) =>
     queryApi<SearchResponse>("/search/tags", {
       method: "POST",
       body: JSON.stringify(body),
+      signal,
     }),
 
-  searchBySpecies: (body: SpeciesSearchRequest) =>
+  searchBySpecies: (body: SpeciesSearchRequest, signal?: AbortSignal) =>
     queryApi<SearchResponse>("/search/species", {
       method: "POST",
       body: JSON.stringify(body),
+      signal,
     }),
 
   searchByThumbnail: (body: ThumbnailLookupRequest) =>
@@ -125,7 +131,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  async searchByFile(file: File): Promise<SearchResponse> {
+  async searchByFile(file: File, signal?: AbortSignal): Promise<SearchResponse> {
     const token = await getIdToken();
 
     const attempt = async () => {
@@ -135,6 +141,7 @@ export const api = {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
+        signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -157,7 +164,8 @@ export const api = {
       return await attempt();
     } catch (e) {
       const err = e as Error & { retriable?: boolean };
-      if (err.retriable) {
+      // Don't retry if the caller aborted.
+      if (err.retriable && !signal?.aborted) {
         await new Promise(r => setTimeout(r, 8000));
         return await attempt();
       }

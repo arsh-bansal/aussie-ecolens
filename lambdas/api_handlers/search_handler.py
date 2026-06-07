@@ -8,6 +8,7 @@ POST /search/species  — presence only              {"species": ["Dingo"]}
 from flask import Blueprint, request, jsonify
 from auth import require_auth
 from cosmos_client import query_files
+from species_catalog import expand_species
 from s3_presign import presign_s3_uri
 
 search_bp = Blueprint("search", __name__)
@@ -57,8 +58,16 @@ def search_by_species():
     if not species:
         return jsonify({"error": "Provide at least one species"}), 400
 
+    # Each term matches by substring: "common" -> any species whose name contains
+    # it. A term becomes an OR-group of canonical names; groups are AND'd, so
+    # multiple terms still narrow the result. If a term matches no known species,
+    # the search returns nothing (rather than ignoring the term).
+    groups = [expand_species(term) for term in species]
+    if any(not g for g in groups):
+        return jsonify({"results": []}), 200
+
     try:
-        docs = query_files(species_presence=species)
+        docs = query_files(species_any_groups=groups)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
