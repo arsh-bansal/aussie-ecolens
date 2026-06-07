@@ -29,6 +29,19 @@ export interface SearchResult {
 
 export interface SearchResponse {
   results: SearchResult[];
+  detected_tags?: Record<string, number>;
+}
+
+export interface QueryFilePresignRequest {
+  content_type: string;
+  size_bytes: number;
+}
+
+export interface QueryFilePresignResponse {
+  presigned_url: string;
+  key: string;
+  content_type: string;
+  expires_in: number;
 }
 
 export interface FileStatusResponse {
@@ -91,6 +104,18 @@ export interface ListSubscriptionsResponse {
   tags: string[];
   status: 'subscribed' | 'pending_confirmation' | 'none';
   email: string | null;
+  message?: string;
+}
+
+export interface UnsubscribeRequest {
+  tag?: string;
+  all?: boolean;
+}
+
+export interface UnsubscribeResponse {
+  status: 'unsubscribed' | 'unsubscribed_all' | 'not_subscribed' | 'none';
+  tag?: string;
+  email?: string;
   message?: string;
 }
 

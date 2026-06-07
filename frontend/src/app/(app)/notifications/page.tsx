@@ -7,6 +7,11 @@ import { useToast } from '@/contexts/ToastContext';
 // The `tag` MUST be the exact canonical species name the Tagger stores and the
 // Notifier publishes — SNS filter policies match it by case-sensitive exact
 // string. Only species in the model's taxonomy can ever fire an alert.
+const PRESET_TAGS = new Set([
+  'Southern Cassowary', 'Red Fox', 'Domestic Cat', 'Dingo',
+  'Eastern Grey Kangaroo', 'Common Wombat',
+]);
+
 const PRESET_SPECIES = [
   { name: 'Southern Cassowary', tag: 'Southern Cassowary', icoStyle: { background: 'var(--gold-soft)', color: 'var(--gold)' } },
   { name: 'Red Fox (invasive)', tag: 'Red Fox', icoStyle: { background: 'var(--clay-soft)', color: 'var(--clay)' } },
@@ -62,6 +67,44 @@ export default function NotificationsPage() {
       setLoading(null);
     }
   };
+
+  const unsubscribe = async (tag: string) => {
+    setLoading(tag);
+    try {
+      const res = await api.unsubscribe({ tag });
+      setSubscribed(prev => {
+        const next = new Set(prev);
+        next.delete(tag);
+        return next;
+      });
+      if (res.status === 'unsubscribed_all') {
+        setSubscribed(new Set());
+        toast.success(res.message ?? 'All SNS alerts cancelled.');
+      } else {
+        toast.success(`Unsubscribed from "${tag}" alerts.`);
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Unsubscribe failed');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const unsubscribeAll = async () => {
+    setLoading('__all__');
+    try {
+      const res = await api.unsubscribe({ all: true });
+      setSubscribed(new Set());
+      setPendingConfirm(false);
+      toast.success(res.message ?? 'All SNS email alerts cancelled.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Unsubscribe failed');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const extraSubscribed = [...subscribed].filter(t => !PRESET_TAGS.has(t));
 
   const handleCustom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,7 +165,15 @@ export default function NotificationsPage() {
                     <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)', marginTop: '3px', fontFamily: 'var(--font-mono)' }}>tag: {tag}</div>
                   </div>
                   {isOn ? (
-                    <span className="badge badge-euc"><span className="dot" style={{ background: 'var(--euc)' }} />Subscribed</span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => unsubscribe(tag)}
+                      disabled={isLoading}
+                      style={{ flexShrink: 0, color: 'var(--clay)', borderColor: 'var(--clay-soft)' }}
+                    >
+                      {isLoading ? 'Removing…' : 'Unsubscribe'}
+                    </button>
                   ) : (
                     <button
                       className="btn btn-ghost btn-sm"
@@ -136,6 +187,43 @@ export default function NotificationsPage() {
                 </div>
               );
             })}
+
+            {extraSubscribed.length > 0 && (
+              <div style={{ padding: '8px 20px 0', borderTop: '1px solid var(--line-soft)' }}>
+                <p style={{ fontSize: '12px', color: 'var(--ink-faint)', marginBottom: '10px' }}>Other active subscriptions</p>
+                {extraSubscribed.map(tag => (
+                  <div key={tag} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid var(--line-soft)' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>{tag}</span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => unsubscribe(tag)}
+                      disabled={loading === tag}
+                      style={{ color: 'var(--clay)', borderColor: 'var(--clay-soft)' }}
+                    >
+                      {loading === tag ? 'Removing…' : 'Unsubscribe'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {subscribed.size > 0 && (
+              <div style={{ padding: '14px 20px', borderTop: '1px solid var(--line-soft)' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={unsubscribeAll}
+                  disabled={loading === '__all__'}
+                  style={{ color: 'var(--clay)', borderColor: 'var(--clay-soft)' }}
+                >
+                  {loading === '__all__' ? 'Cancelling…' : 'Unsubscribe from all alerts'}
+                </button>
+                <p style={{ fontSize: '12px', color: 'var(--ink-faint)', marginTop: '8px' }}>
+                  Cancels your AWS SNS email subscription (same as the unsubscribe link in alert emails).
+                </p>
+              </div>
+            )}
 
             {/* Custom tag */}
             <div style={{ padding: '18px 20px' }}>
