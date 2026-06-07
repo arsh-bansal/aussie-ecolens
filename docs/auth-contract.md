@@ -1,29 +1,36 @@
 # Cross-cloud auth contract
 
-**Owner:** P1 (Adam).
-**For:** P3 (Rachana) implementing the Azure Function App side.
+**Owner:** P1 (Adam). **Implemented by:** Query API (`lambdas/api_handlers/auth.py`).
 **Status:** Live. Tested against deployed Cognito on 2026-05-28.
 
 ## TL;DR
 
-Azure verifies the **same** Cognito JWT that AWS issues. No second
-identity provider, no token exchange. Azure trusts AWS Cognito because
-it verifies the JWT signature against Cognito's public keys (JWKS),
-which never need to be shared in secret.
+Every protected API verifies the **same** Cognito JWT that the frontend
+obtains at login. No second identity provider, no token exchange. The
+query API (Flask on AWS Lambda) trusts Cognito because it verifies the
+JWT signature against Cognito's public JWKS endpoint — keys are public,
+never shared as secrets.
+
+Early planning assigned this to an Azure Function App. The delivered
+system implements the same contract in `lambdas/api_handlers/` on AWS
+Lambda, reading user data from Azure Cosmos DB.
 
 ## What the frontend sends
 
-Every Azure Function call from the React app has this header:
+Every authenticated API call from the Next.js app includes:
 
 ```
 Authorization: Bearer <Cognito ID token JWT>
 ```
 
-The token is the `ID token`, **not** the access token. The ID token
+The token is the **ID token**, not the access token. The ID token
 carries `email`, `given_name`, and `family_name` claims — useful for
-Cosmos lookups without a separate Cognito API call.
+SNS subscription endpoints without a separate Cognito API call.
 
-## What Azure must check
+Implemented in `frontend/src/lib/cognito.ts` and attached by
+`frontend/src/lib/api.ts` on every request.
+
+## What the API must check
 
 In this order, fail-closed on any error:
 
@@ -39,19 +46,30 @@ In this order, fail-closed on any error:
    401 if not.
 6. **`aud` (audience)** — must equal exactly the App Client ID below.
    Return 401 if not.
-7. **`token_use`** — must equal `"id"`. Return 401 if not (rejects
-   anyone trying to pass an access token).
+7. **`token_use`** — must equal `"id"` when enforced. Return 401 if an
+   access token is passed instead.
 8. **`exp` (expiry)** — must be in the future, with a small clock-skew
    tolerance (60 seconds is fine). Return 401 if expired.
 9. **`nbf` if present** — must be in the past with the same skew.
 
-If all pass, the Function reads `sub`, `email`, etc. from the claims
-and proceeds.
+If all pass, the handler reads `sub`, `email`, etc. from the claims
+and proceeds. The Flask middleware sets `request.user_id` (Cognito
+`sub`) and `request.user_email`.
+
+## Two layers of validation (query API)
+
+| Layer | Where | Role |
+| --- | --- | --- |
+| API Gateway JWT authorizer | `lambdas/api_handlers/template.yaml` | Rejects bad tokens at the edge (`aud`, `iss`, `token_use=id`) |
+| Flask `@require_auth` | `lambdas/api_handlers/auth.py` | Full RS256 + JWKS verification; injects `request.user_id` |
+
+The upload API (`/uploads/presign`) uses the same Cognito JWT authorizer
+on its separate API Gateway in `infra/aws/infrastructure.yaml`.
 
 ## Concrete values
 
 | Item | Value |
-|---|---|
+| --- | --- |
 | JWKS URL | `https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_1XdbAo4mu/.well-known/jwks.json` |
 | Issuer (`iss` claim) | `https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_1XdbAo4mu` |
 | Audience (`aud` claim) | `50d6nn8afslqudlmd37gssnv6n` |
@@ -59,124 +77,58 @@ and proceeds.
 | Signing algorithm | `RS256` |
 | Region | `ap-southeast-2` |
 
-## Implementation notes for the Azure side
+Environment variables on the query API Lambda:
+
+```
+COGNITO_USER_POOL_ID=ap-southeast-2_1XdbAo4mu
+COGNITO_CLIENT_ID=50d6nn8afslqudlmd37gssnv6n
+AWS_REGION=ap-southeast-2
+```
+
+## Implementation notes
 
 - **Cache JWKS for at least 1 hour.** Fetching JWKS on every request
-  kills performance and risks rate-limiting from Cognito. Cache in
-  memory at function-app cold-start; refresh only if the `kid` from
-  the incoming JWT isn't in the cache.
+  hurts performance. The live implementation caches in module-level
+  `_JWKS_CACHE` in `auth.py` for the Lambda instance lifetime.
 - **Cognito rotates signing keys** occasionally. The JWKS endpoint can
-  return up to 2 active keys at once. Always look up by `kid` rather
-  than assuming a single key.
-- **Don't use `decode` without `verify`.** Some JWT libraries expose a
-  `decode_unverified` that returns claims without signature checking.
-  Never use it in production — anyone could mint a token. Always
-  call the verifying API.
-- **Return 401, not 403.** The standard distinction: 401 = "you're not
-  authenticated", 403 = "you are, but not allowed to do this". A bad
-  token is 401.
+  return up to 2 active keys. Always look up by `kid` rather than
+  assuming a single key.
+- **Don't use `decode` without `verify`.** `jwt.get_unverified_header`
+  is only used to read `kid` before verification — never trust claims
+  from an unverified decode.
+- **Return 401, not 403.** A bad or missing token is 401
+  (unauthenticated). Reserve 403 for authenticated users denied a
+  specific action.
 
-## Sample implementation (Python, for Azure Functions)
+## Live implementation (Flask query API)
 
-The library is `PyJWT[crypto]`. Pin to `>=2.8`.
-
-```python
-# shared/cognito_auth.py
-import os
-import time
-import logging
-from functools import wraps
-from typing import Callable
-import jwt
-from jwt import PyJWKClient
-import azure.functions as func
-
-ISSUER = os.environ["COGNITO_ISSUER"]
-AUDIENCE = os.environ["COGNITO_AUDIENCE"]
-JWKS_URL = f"{ISSUER}/.well-known/jwks.json"
-
-# Cached once per function-app instance; lasts until cold restart.
-_jwks_client = PyJWKClient(JWKS_URL, cache_keys=True, lifespan=3600)
-
-
-def _unauthorized(reason: str) -> func.HttpResponse:
-    logging.info(f"401: {reason}")
-    return func.HttpResponse(
-        body='{"error":"unauthorized"}',
-        status_code=401,
-        mimetype="application/json",
-    )
-
-
-def require_cognito(handler: Callable) -> Callable:
-    @wraps(handler)
-    def wrapper(req: func.HttpRequest) -> func.HttpResponse:
-        auth = req.headers.get("authorization") or req.headers.get("Authorization")
-        if not auth or not auth.lower().startswith("bearer "):
-            return _unauthorized("missing bearer")
-
-        token = auth[7:]
-        try:
-            signing_key = _jwks_client.get_signing_key_from_jwt(token).key
-            claims = jwt.decode(
-                token,
-                signing_key,
-                algorithms=["RS256"],
-                audience=AUDIENCE,
-                issuer=ISSUER,
-                leeway=60,
-                options={"require": ["exp", "iss", "aud", "sub"]},
-            )
-        except jwt.ExpiredSignatureError:
-            return _unauthorized("expired")
-        except jwt.InvalidTokenError as e:
-            return _unauthorized(f"invalid: {e}")
-
-        if claims.get("token_use") != "id":
-            return _unauthorized("not an id token")
-
-        # Attach claims so the handler can use them
-        req.cognito_claims = claims
-        return handler(req)
-
-    return wrapper
-```
-
-Usage in a Function:
+Canonical source: `lambdas/api_handlers/auth.py`.
 
 ```python
-# queries/search_tags/__init__.py
-import json
-import azure.functions as func
-from shared.cognito_auth import require_cognito
+from auth import require_auth
 
-@require_cognito
-def main(req: func.HttpRequest) -> func.HttpResponse:
-    user_sub = req.cognito_claims["sub"]
-    body = req.get_json()
-    # ... query Cosmos for user_sub's allowed files ...
-    return func.HttpResponse(
-        body=json.dumps({"sub": user_sub, "results": []}),
-        mimetype="application/json",
-    )
+@search_bp.route("/search/species", methods=["POST"])
+@require_auth
+def search_species():
+    user_id = request.user_id   # Cognito sub — Cosmos partition key
+    email   = request.user_email
+    ...
 ```
 
-Function App settings (in Bicep or via Azure Portal):
+The decorator:
+1. Extracts `Bearer` token from `Authorization`
+2. Fetches JWKS (cached) from Cognito
+3. Verifies RS256 signature, `iss`, `aud`, `exp`
+4. Sets `request.user_id` and `request.user_email`
+5. Returns `401` JSON on any failure
 
-```
-COGNITO_ISSUER = https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_1XdbAo4mu
-COGNITO_AUDIENCE = 50d6nn8afslqudlmd37gssnv6n
-```
+Library: `PyJWT` (see `lambdas/api_handlers/requirements.txt`).
 
 ## Testing
 
-To grab a real token for testing without going through the UI:
+Grab a real ID token for curl tests:
 
 ```bash
-# After signing up a user via the UI, get an ID token via aws CLI.
-# Requires ALLOW_ADMIN_USER_PASSWORD_AUTH enabled on the app client
-# (currently disabled — enable temporarily for testing if needed).
-
 aws cognito-idp admin-initiate-auth \
   --user-pool-id ap-southeast-2_1XdbAo4mu \
   --client-id 50d6nn8afslqudlmd37gssnv6n \
@@ -187,19 +139,30 @@ aws cognito-idp admin-initiate-auth \
   --output text
 ```
 
-Then `curl -H "Authorization: Bearer $TOKEN" https://<azure-func-url>/...`.
+Requires `ALLOW_ADMIN_USER_PASSWORD_AUTH` on the app client (enable
+temporarily for testing if needed).
 
-If the token is good, the function returns 2xx. If bad, 401. If you
-get 5xx, the verification code itself is broken — check the function
-logs in Application Insights.
+```bash
+TOKEN=<id-token-from-above>
+QUERY_API=https://<query-api-id>.execute-api.ap-southeast-2.amazonaws.com
+
+curl -s -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"dingo": null}' \
+  "$QUERY_API/search/species"
+```
+
+- Valid token → `200` with results
+- Missing/invalid token → `401`
+- `5xx` → check CloudWatch logs on the query API Lambda
 
 ## Changes to this contract
 
 If anyone needs the AWS side to issue tokens differently (extra claims,
-different audience, etc.), open it as a discussion with P1 — don't
-change Azure to compensate. Drift between the two sides will be hard
-to debug.
+different audience, etc.), discuss with P1 (Cognito owner) — don't
+change verification logic on one API only. Drift between upload and
+query APIs will be hard to debug.
 
-The JWKS URL and issuer string above are derived from the User Pool
-ID. Re-deploying the auth stack with the same name produces the same
+The JWKS URL and issuer string are derived from the User Pool ID.
+Re-deploying the auth stack with the same pool ID produces the same
 URL/issuer, so this contract survives stack redeploys.

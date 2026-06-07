@@ -1,27 +1,44 @@
 # Lambdas (AWS)
 
-All AWS Lambda functions, Python 3.12.
+All AWS Lambda functions for Aussie EcoLens, Python 3.12.
 
 ## Conventions
 
-- Each Lambda lives in its own subfolder with `handler.py` (entry point), `requirements.txt`, and (where applicable) `Dockerfile`.
-- Shared utilities go in `shared/`. Each Lambda symlinks or copies what it needs at deploy time (see each Lambda's deploy script).
-- Logging: use `shared/logger.py` (structured JSON logs to CloudWatch).
-- All Lambdas read config from environment variables. See each Lambda's README for the var list.
-- Use the `LabRole` execution role (AWS Academy constraint).
+- Each Lambda lives in its own subfolder with a `src/` package layout (tagger, thumbnail, replicator, notifier) or flat modules (api_handlers).
+- Container image: **tagger** only (models + ffmpeg + OpenCV exceed zip limits).
+- Zip deployment: thumbnail, replicator, notifier, api_handlers.
+- Config via environment variables; see each subfolder's README.
+- AWS Academy: use the shared `LabRole` execution role where IAM creation is constrained.
 
 ## Deployment
 
-The top-level `infra/aws/template.yaml` (SAM) wires every Lambda to its triggers. Most Lambdas deploy as zip; the Tagger deploys as a container image. Run `infra/aws/deploy.sh` from the repo root.
+Each Lambda has a SAM template under `infra/aws/<name>/template.yaml`. Deploy per stack — there is no single top-level `infra/aws/template.yaml`.
+
+| Lambda | Deploy from | Notes |
+| --- | --- | --- |
+| `tagger/` | `infra/aws/tagger/` | `make push` then `sam build && sam deploy` |
+| `thumbnail/` | `infra/aws/thumbnail/` | `sam build && sam deploy` |
+| `replicator/` | `infra/aws/replicator/` | Needs Cosmos endpoint/key |
+| `notifier/` | `infra/aws/notifier/` | Needs SNS topic ARN |
+| `api_handlers/` | `lambdas/api_handlers/deploy.sh` | Flask query API + API Gateway |
+
+The **upload presign** Lambda is defined inline in `infra/aws/infrastructure.yaml` (not under `lambdas/`).
 
 ## Index
 
-| Lambda | Trigger | Purpose |
+| Folder | Trigger | Purpose |
 | --- | --- | --- |
-| `thumbnail/` | S3 ObjectCreated (images) | Generate thumbnail |
-| `video_splitter/` | S3 ObjectCreated (videos) | ffmpeg → 1 fps frames to S3 |
-| `tagger/` | S3 ObjectCreated (frames + images) | MegaDetector + SpeciesNet |
-| `aggregator/` | DynamoDB Streams | Merge per-frame tags into video record |
-| `replicator/` | DynamoDB Streams | Mirror to Cosmos DB |
-| `notifier/` | DynamoDB Streams | Publish to per-tag SNS topics |
-| `api_handlers/` | API Gateway | REST endpoints (presign, modify-tags, delete, subscribe, by-file) |
+| `tagger/` | EventBridge S3 ObjectCreated | ML pipeline: MegaDetector + SpeciesNet for images; video mode extracts 1 fps frames in-process and aggregates tag counts |
+| `tagger/` (query handler) | Sync invoke from query API | Tag-only inference for search-by-file; no DynamoDB write |
+| `thumbnail/` | EventBridge S3 ObjectCreated (images) | Resize to deterministic `<sha256>.jpg` in thumbnails bucket |
+| `replicator/` | DynamoDB Streams | Upsert/delete records in Azure Cosmos DB |
+| `notifier/` | DynamoDB Streams | Publish per-species SNS messages (filter policies route to subscribers) |
+| `api_handlers/` | API Gateway HTTP API | Query API: search, modify tags, delete, subscribe, list files, status poll. Reads Cosmos; mutations write DynamoDB |
+
+## Video processing note
+
+Older docs listed separate `video_splitter/` and `aggregator/` Lambdas. The delivered system consolidates video frame extraction and tag aggregation inside `lambdas/tagger/` (`video_handler.py` + `domain/aggregate.py`). There are no `video_splitter/` or `aggregator/` folders.
+
+## Query API note
+
+Despite early planning for an `azure_functions/` Azure Function App, the query REST API is implemented here as **Flask on AWS Lambda**. Azure Cosmos DB is the read database; the compute runs on AWS API Gateway.
