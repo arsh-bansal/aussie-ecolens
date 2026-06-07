@@ -125,10 +125,10 @@ class TestToUpdate:
         assert u["values"][":thumbnail_url"]["S"].startswith("s3://")
         assert u["values"][":thumbnail_url"]["S"].endswith("/abc123.jpg")
 
-    def test_thumbnail_url_null_for_videos(self) -> None:
+    def test_thumbnail_url_set_for_videos(self) -> None:
         u = DynamoDBService._to_update(_result("u1/clip.mp4", {"Bos_taurus": 1}))
         assert u["values"][":file_type"]["S"] == "video"
-        assert u["values"][":thumbnail_url"] == {"NULL": True}
+        assert u["values"][":thumbnail_url"]["S"].endswith("/clip.jpg")
 
     def test_empty_tags_still_updates(self) -> None:
         # Zero-animal uploads: the record must still be tagged with tags {}.

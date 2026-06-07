@@ -21,21 +21,18 @@ import json
 import tempfile
 import time
 import urllib.parse
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import structlog
 
 from aussie_ecolens_tagger import _runtime
 from aussie_ecolens_tagger.config import settings
-from aussie_ecolens_tagger.domain.aggregate import aggregate_frame_tags
 from aussie_ecolens_tagger.domain.models import TagResult
-from aussie_ecolens_tagger.domain.pipeline import tag_image
+from aussie_ecolens_tagger.domain.video_pipeline import store_video_poster, tag_video_path
 from aussie_ecolens_tagger.exceptions import TaggerError
 from aussie_ecolens_tagger.logging import get_logger
 from aussie_ecolens_tagger.services.dynamodb import DynamoDBService
-from aussie_ecolens_tagger.services.video import extract_frames_one_per_second
-
 log = get_logger(__name__)
 
 _s3 = _runtime.s3
@@ -48,6 +45,12 @@ _db = DynamoDBService(
 )
 
 log.info("video handler ready")
+
+QUERY_TEMP_PREFIX = "query-temp/"
+
+
+def _is_query_temp_key(key: str) -> bool:
+    return key.startswith(QUERY_TEMP_PREFIX)
 
 
 def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]:
@@ -76,6 +79,10 @@ def _process_one(bucket: str, key: str) -> dict[str, Any]:
     structlog.contextvars.bind_contextvars(s3_bucket=bucket, s3_key=key)
     started = time.monotonic()
 
+    if _is_query_temp_key(key):
+        log.info("skipping transient query video (search-by-file)")
+        return {"s3_key": key, "skipped": "query-temp"}
+
     try:
         with tempfile.NamedTemporaryFile(
             suffix=Path(key).suffix or ".mp4", delete=True
@@ -83,55 +90,30 @@ def _process_one(bucket: str, key: str) -> dict[str, Any]:
             local_path = Path(tmp.name)
             _s3.download(bucket, key, local_path)
 
-            # Tag one frame per second; collect per-frame Latin tag maps.
-            # MegaDetector reads the image FROM THE PATH (it ignores any in-
-            # memory image), so each frame must be written to a real image file
-            # and that path handed to the pipeline - passing the video path
-            # would make the detector try to read the .mp4 as an image (zero
-            # detections). We write each frame to a temp .jpg in the same dir.
-            #
-            # A frame cap bounds total runtime: CPU inference is ~15s/frame, and
-            # Lambda's hard ceiling is 15 min, so we process at most
-            # settings.max_video_frames seconds of video. Longer videos are
-            # truncated (documented limitation; the production path fans frames
-            # out to parallel workers via Step Functions / Batch).
-            frames_dir = local_path.parent
-            frame_tag_maps: list[dict[str, int]] = []
-            n_frames = 0
-            truncated = False
-            for second, frame in extract_frames_one_per_second(local_path):
-                if n_frames >= settings.max_video_frames:
-                    truncated = True
-                    log.warning(
-                        "video frame cap reached; truncating",
-                        cap=settings.max_video_frames,
-                    )
-                    break
-                # Persist the frame as a real JPEG so MegaDetector can read it.
-                frame_path = frames_dir / f"frame_{second:05d}.jpg"
-                frame.save(frame_path, format="JPEG")
-                try:
-                    frame_result = tag_image(
-                        image_path=frame_path,
-                        image=frame,
-                        detector=_detector,
-                        classifier=_classifier,
-                        snip_size=settings.snip_size,
-                        s3_bucket=bucket,
-                        s3_key=key,
-                    )
-                    frame_tag_maps.append(frame_result.tags)
-                finally:
-                    frame_path.unlink(missing_ok=True)
-                n_frames += 1
+            sha = PurePosixPath(key).stem
+            store_video_poster(
+                local_path,
+                s3=_s3,
+                thumbnails_bucket=settings.thumbnails_bucket,
+                sha=sha,
+                max_edge=settings.thumbnail_max_edge,
+                jpeg_quality=settings.thumbnail_jpeg_quality,
+            )
 
-        # Aggregate per-frame tags -> one video-level tag map (max per species).
-        aggregated = aggregate_frame_tags(frame_tag_maps)
+            aggregated, n_frames, truncated = tag_video_path(
+                local_path,
+                detector=_detector,
+                classifier=_classifier,
+                snip_size=settings.snip_size,
+                max_frames=settings.max_video_frames,
+                s3_bucket=bucket,
+                s3_key=key,
+            )
         elapsed_ms = (time.monotonic() - started) * 1000.0
 
         # Build a synthetic TagResult so the existing DynamoDB writer produces
-        # the same contract record (it sets file_type=video from the key, and
-        # leaves thumbnail_url NULL for videos). n_detections/classified are
+        # the same contract record (file_type=video, thumbnail_url=<sha>.jpg).
+        # n_detections/classified are
         # summed across frames for observability; tags are the aggregate.
         total = sum(aggregated.values())
         result = TagResult(

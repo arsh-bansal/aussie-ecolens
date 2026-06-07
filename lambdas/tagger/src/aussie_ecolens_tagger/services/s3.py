@@ -87,3 +87,31 @@ class S3Service:
             return Image.open(path).convert("RGB")
         except Exception as e:  # noqa: BLE001 -- rewrap as typed error
             raise ImageDecodeError(f"failed to decode {path.name}: {e}") from e
+
+    def put_bytes(
+        self,
+        bucket: str,
+        key: str,
+        data: bytes,
+        *,
+        content_type: str = "application/octet-stream",
+    ) -> None:
+        self._client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+        )
+
+    def put_json(self, bucket: str, key: str, payload: dict) -> None:
+        import json
+
+        self._client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(payload).encode("utf-8"),
+            ContentType="application/json",
+        )
+
+    def delete_object(self, bucket: str, key: str) -> None:
+        self._client.delete_object(Bucket=bucket, Key=key)

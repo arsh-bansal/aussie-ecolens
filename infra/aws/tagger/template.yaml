@@ -249,6 +249,7 @@ Resources:
       FunctionName: !Sub "${ProjectPrefix}-query-tagger"
       PackageType: Image
       ImageUri: !Ref ImageUri
+      Timeout: 900
       AutoPublishAlias: live
       ProvisionedConcurrencyConfig:
         ProvisionedConcurrentExecutions: 1
@@ -256,7 +257,7 @@ Resources:
         Command:
           - aussie_ecolens_tagger.query_handler.lambda_handler
       EphemeralStorage:
-        Size: 2048
+        Size: 4096
       Environment:
         Variables:
           # No FILES_TABLE / no uploads-write: this function never persists.
@@ -280,6 +281,7 @@ Resources:
           MPLCONFIGDIR: /tmp/matplotlib
           LOG_LEVEL: INFO
           DRY_RUN: "false"
+          QUERY_MAX_VIDEO_FRAMES: "15"
       Policies:
         # Tighter than the tagger: read models (lazy load) + uploads (the
         # optional S3-key input path), write own logs. NO DynamoDB.
@@ -304,13 +306,34 @@ Resources:
                     - UploadsNameProvided
                     - !Ref UploadsBucketName
                     - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+            - Sid: WriteQueryResults
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:DeleteObject
+              Resource: !Sub
+                - "arn:aws:s3:::${Bucket}/query-results/*"
+                - Bucket: !If
+                    - UploadsNameProvided
+                    - !Ref UploadsBucketName
+                    - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
+            - Sid: DeleteQueryTemp
+              Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: !Sub
+                - "arn:aws:s3:::${Bucket}/query-temp/*"
+                - Bucket: !If
+                    - UploadsNameProvided
+                    - !Ref UploadsBucketName
+                    - !Sub "${ProjectPrefix}-uploads-${AWS::AccountId}"
 
   # ---- Video-Tagger ---------------------------------------------------------
   # Third entry point on the same tagger image (video_handler). Triggered by
   # video uploads (EventBridge, video-suffix filtered). Samples one frame per
   # second, tags each frame with the shared image pipeline, aggregates the
   # per-frame tags (max count per species), and writes ONE video record
-  # (file_type=video, thumbnail_url NULL). Longer timeout + ephemeral storage
+  # (file_type=video, poster thumbnail from frame 0). Longer timeout + ephemeral storage
   # than the image tagger because a video is many frames of inference.
   VideoTaggerLogGroup:
     Type: AWS::Logs::LogGroup
@@ -386,6 +409,13 @@ Resources:
               Resource:
                 - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}"
                 - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTableName}/index/*"
+            - Sid: WriteThumbnails
+              Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub
+                - "arn:aws:s3:::${Bucket}/*"
+                - Bucket: !Sub "${ProjectPrefix}-thumbnails-${AWS::AccountId}"
       Events:
         VideoUploaded:
           Type: EventBridgeRule

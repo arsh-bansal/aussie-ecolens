@@ -51,6 +51,18 @@ class TaggerSettings(BaseSettings):
     # S3 buckets owned by the write path.
     uploads_bucket: str = Field(default="aussie-ecolens-uploads", description="Source media bucket")
     thumbnails_bucket: str = Field(default="aussie-ecolens-thumbnails", description="Thumbnail bucket")
+    thumbnail_max_edge: int = Field(
+        default=320,
+        ge=16,
+        le=2048,
+        description="Longest-edge size (px) for video poster thumbnails",
+    )
+    thumbnail_jpeg_quality: int = Field(
+        default=80,
+        ge=1,
+        le=95,
+        description="JPEG quality for video poster thumbnails",
+    )
     frames_bucket: str = Field(default="aussie-ecolens-frames", description="Video frames bucket")
     models_bucket: str = Field(default="aussie-ecolens-models", description="Versioned model registry bucket")
 
@@ -125,6 +137,16 @@ class TaggerSettings(BaseSettings):
         description=(
             "Max frames (= seconds, at 1 fps) to tag per video. Bounds runtime "
             "within the Lambda timeout; longer videos are truncated."
+        ),
+    )
+
+    query_max_video_frames: int = Field(
+        default=15,
+        ge=1,
+        le=30,
+        description=(
+            "Query-tagger only: max frames for async search-by-file video "
+            "(1 fps; longer clips are truncated)."
         ),
     )
 
