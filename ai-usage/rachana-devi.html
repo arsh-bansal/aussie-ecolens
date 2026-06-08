@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Usage Declaration — Rachana Devi</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 14px; color: #222; background: #f9f9f9; padding: 40px; }
+  .container { max-width: 1100px; margin: 0 auto; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 40px; }
+  h1 { font-size: 22px; color: #1a1a2e; border-bottom: 3px solid #2E74B5; padding-bottom: 10px; margin-bottom: 20px; }
+  h2 { font-size: 16px; color: #2E74B5; margin: 30px 0 10px; border-left: 4px solid #2E74B5; padding-left: 10px; }
+  .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; background: #f0f4f9; padding: 16px; border-radius: 4px; }
+  .header-grid div { font-size: 13px; }
+  .header-grid span { font-weight: bold; color: #1a1a2e; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  th { background: #2E74B5; color: #fff; padding: 10px 8px; text-align: left; }
+  td { padding: 9px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+  tr:nth-child(even) td { background: #f6f9fd; }
+  .l1 { background: #e8f5e9; color: #2e7d32; font-weight: bold; border-radius: 3px; padding: 2px 6px; }
+  .l2 { background: #fff3e0; color: #e65100; font-weight: bold; border-radius: 3px; padding: 2px 6px; }
+  .l3 { background: #fce4ec; color: #880e4f; font-weight: bold; border-radius: 3px; padding: 2px 6px; }
+  .none { background: #eeeeee; color: #444; font-weight: bold; border-radius: 3px; padding: 2px 6px; }
+  .legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
+  .legend-item { padding: 8px 12px; border-radius: 4px; font-size: 13px; }
+  .declaration { background: #f0f4f9; border-left: 4px solid #2E74B5; padding: 16px; margin-top: 10px; border-radius: 4px; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; line-height: 1.5; }
+  p { line-height: 1.7; margin-bottom: 8px; }
+  .tag { display: inline-block; background: #e3f2fd; color: #1565c0; border-radius: 3px; padding: 1px 6px; font-size: 12px; margin: 1px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>AI Usage Declaration — FIT5225 Aussie EcoLens</h1>
+
+  <div class="header-grid">
+    <div><span>Name:</span> Rachana Devi</div>
+    <div><span>Student ID:</span> 35102896</div>
+    <div><span>Email:</span> rachanadevi3010@gmail.com</div>
+    <div><span>Git author:</span> Rachana &lt;rachanadevi3010@gmail.com&gt;</div>
+    <div><span>Component:</span> Database layer, Azure Query API, Cross-cloud Auth</div>
+    <div><span>Repository:</span> github.com/arsh-bansal/aussie-ecolens (private)</div>
+    <div><span>Branch:</span> feat/azure-query-api (merged to main via PR #8)</div>
+    <div><span>Date generated:</span> 8 June 2026</div>
+  </div>
+
+  <!-- AI TOOLS -->
+  <h2>AI Tools Used</h2>
+  <ul>
+    <li><strong>Claude (claude.ai)</strong> — Used for writing handler boilerplate, auth middleware structure, debugging errors, and authoring the README. All output was reviewed, edited, and manually tested before use.</li>
+  </ul>
+
+  <!-- NARRATIVE -->
+  <h2>How I Used AI</h2>
+  <p>
+    I used Claude primarily as a coding assistant rather than a decision-maker. The API architecture, DynamoDB schema design, Cosmos DB data model, and cross-cloud authentication approach were all designed by me — often in coordination with teammates. Claude helped me generate initial boilerplate for handler modules and the JWKS-based auth middleware, which I then reviewed, adapted, and tested manually.
+  </p>
+  <p>
+    For debugging, I would describe the error and context to Claude and use its suggestions as a starting point, but I verified every fix against actual behaviour in the deployed and local environments. Claude made a number of mistakes I had to correct manually — most notably around Azure region configuration and endpoint routing — which required me to override its suggestions and apply the correct values myself.
+  </p>
+
+  <!-- MAIN TABLE -->
+  <h2>Work Item Breakdown</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Work Item</th>
+        <th>Branch / PR</th>
+        <th>Commits</th>
+        <th>AI Tool</th>
+        <th>Autonomy</th>
+        <th>What I Did</th>
+        <th>What AI Did</th>
+        <th>How Verified</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>DynamoDB table schema design</td>
+        <td>feat/azure-query-api</td>
+        <td>cb0ad4b</td>
+        <td>None</td>
+        <td><span class="none">Human</span></td>
+        <td>Designed all fields (file_id, user_id, checksum, file_type, s3_url, thumbnail_url, tags, uploaded_at, updated_at) and provisioned via CloudFormation. Coordinated schema contract with Arsh.</td>
+        <td>—</td>
+        <td>Tested with Arsh's Lambda writing to the table; confirmed records appeared correctly in DynamoDB console.</td>
+      </tr>
+      <tr>
+        <td>Azure Cosmos DB provisioning</td>
+        <td>feat/azure-query-api</td>
+        <td>cb0ad4b — infra/azure/cosmos.bicep</td>
+        <td>Claude</td>
+        <td><span class="l2">L2</span></td>
+        <td>Designed the Cosmos DB container structure and partition key strategy. Directed Claude to generate Bicep template scaffolding. Manually fixed the region configuration which Claude got wrong.</td>
+        <td>Generated initial Bicep template structure.</td>
+        <td>Deployed via Azure CLI and confirmed container was reachable from the Azure Function.</td>
+      </tr>
+      <tr>
+        <td>Query API — all handler modules (search, tags, delete, files, thumbnail, query-by-file)</td>
+        <td>feat/azure-query-api</td>
+        <td>cb0ad4b, b8a0e40, 07f8138</td>
+        <td>Claude</td>
+        <td><span class="l2">L2</span></td>
+        <td>Designed all endpoint contracts, request/response shapes, AND logic for tag search, ephemeral file handling for query-by-file, and ownership scoping. Directed Claude for boilerplate handler structure. Manually rewrote endpoint paths and response formats after Claude produced routes that did not match the frontend contract.</td>
+        <td>Generated initial boilerplate handler structure for Flask on Azure Functions.</td>
+        <td>Manually tested every endpoint via Postman and through the deployed frontend. Created multiple test accounts to verify ownership scoping.</td>
+      </tr>
+      <tr>
+        <td>Cross-cloud Cognito JWT verification (JWKS caching)</td>
+        <td>feat/azure-query-api</td>
+        <td>cb0ad4b — lambdas/api_handlers/auth.py</td>
+        <td>Claude</td>
+        <td><span class="l2">L2</span></td>
+        <td>Designed the verification approach: fetch JWKS from Cognito, cache keys, verify signature, issuer, audience, and expiry on every request. Coordinated token claim requirements with Adam. Directed Claude to generate the middleware structure.</td>
+        <td>Generated initial JWKS fetch and token decode boilerplate.</td>
+        <td>Tested with valid and invalid tokens against live Cognito user pool. Confirmed 401 on missing/expired tokens and 200 on valid ones.</td>
+      </tr>
+      <tr>
+        <td>Case-insensitive species search fix</td>
+        <td>feat/azure-query-api</td>
+        <td>2895818, 5a36818</td>
+        <td>Claude</td>
+        <td><span class="l1">L1</span></td>
+        <td>Identified the bug (species names stored in title-case not matching lowercase user queries). Designed the title-case normalisation fix in _safe_species. Used Claude only to confirm the approach.</td>
+        <td>Confirmed the normalisation approach was correct.</td>
+        <td>Tested search queries with lowercase input against title-cased Cosmos DB records. Confirmed results returned correctly.</td>
+      </tr>
+      <tr>
+        <td>Route reshaping for frontend integration</td>
+        <td>feat/azure-query-api</td>
+        <td>07f8138</td>
+        <td>None</td>
+        <td><span class="none">Human</span></td>
+        <td>Manually identified mismatches between API response shapes and what the frontend expected. Renamed routes and reshaped all response payloads to match the agreed frontend-API contract.</td>
+        <td>—</td>
+        <td>Confirmed with Shaurya/Adam that frontend queries resolved correctly after changes.</td>
+      </tr>
+      <tr>
+        <td>README authoring</td>
+        <td>feat/azure-query-api</td>
+        <td>cb0ad4b — lambdas/api_handlers/README.md</td>
+        <td>Claude</td>
+        <td><span class="l2">L2</span></td>
+        <td>Provided all technical content: endpoint descriptions, request/response formats, auth requirements. Directed Claude to format it into a structured README.</td>
+        <td>Formatted and structured the README from my technical notes.</td>
+        <td>Reviewed for accuracy against actual implemented endpoints.</td>
+      </tr>
+      <tr>
+        <td>Integration testing and bug triage</td>
+        <td>All</td>
+        <td>No git trace</td>
+        <td>None</td>
+        <td><span class="none">Human</span></td>
+        <td>Spent hours testing the deployed and local application end-to-end. Created multiple accounts to test auth flows, upload deduplication, search queries, tag editing, and file deletion. Identified and reported bugs to teammates for fixing.</td>
+        <td>—</td>
+        <td>Manual testing across local dev and deployed Azure/AWS environments.</td>
+      </tr>
+      <tr>
+        <td>Team report — core functionality and user flow sections</td>
+        <td>N/A (Google Doc)</td>
+        <td>No git trace</td>
+        <td>None</td>
+        <td><span class="none">Human</span></td>
+        <td>Wrote the core functionality section and user flow documentation with annotated screenshots for the team report.</td>
+        <td>—</td>
+        <td>Reviewed by teammates before submission.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- LEGEND -->
+  <h2>Autonomy Scale Legend</h2>
+  <div class="legend">
+    <div class="legend-item" style="background:#e8f5e9;"><strong>L1 — Human-led:</strong> I designed and wrote it; AI only autocompleted or answered the odd question.</div>
+    <div class="legend-item" style="background:#fff3e0;"><strong>L2 — I instructed, AI built:</strong> I chose the approach and directed it step by step; I reviewed and edited all output.</div>
+    <div class="legend-item" style="background:#fce4ec;"><strong>L3 — AI-led, I supervised:</strong> AI proposed the design and wrote most of the code; I steered, corrected, verified.</div>
+    <div class="legend-item" style="background:#eeeeee;"><strong>Human only:</strong> No AI involvement. Designed and implemented entirely by me.</div>
+  </div>
+
+  <!-- SCOPE -->
+  <h2>Scope of Work (Reconciled)</h2>
+  <ul>
+    <li><strong>Commits:</strong> 5 commits on feat/azure-query-api (merged to main via PR #8 by Arsh Bansal — commits are present in main history but attributed to Arsh's PR)</li>
+    <li><strong>Files authored:</strong> infra/azure/cosmos.bicep, lambdas/api_handlers/app.py, auth.py, cosmos_client.py, delete_handler.py, files_handler.py, lambda_handler.py, query_file_handler.py, search_handler.py, species_map.py, tagging.py, tags_handler.py, thumbnail_handler.py, template.yaml, requirements.txt, README.md</li>
+    <li><strong>Features delivered:</strong> Full Azure query API (6 endpoint categories, 9 handler modules), Cosmos DB provisioning, cross-cloud JWT auth, DynamoDB schema, CloudFormation provisioning</li>
+    <li><strong>Non-git contributions:</strong> DynamoDB table created in AWS console, Cosmos DB configured via Azure portal, schema design, team report sections, integration testing</li>
+    <li><strong>Approximate LOC:</strong> ~800 lines across handler modules and infrastructure</li>
+  </ul>
+
+  <!-- MISTAKES -->
+  <h2>Notable AI Mistakes / Limitations</h2>
+  <ul>
+    <li><strong>Wrong Azure region in Cosmos DB connection code:</strong> Claude generated connection strings and endpoint URLs with an incorrect region. Required multiple iterations to identify and manually fix the correct australiaeast endpoint configuration.</li>
+    <li><strong>Endpoint route mismatches:</strong> Claude's generated Flask routes did not match the frontend-API contract agreed with the team. I had to manually rename routes and reshape response payloads across multiple handlers to align with what the frontend expected.</li>
+    <li><strong>Generic boilerplate:</strong> Initial handler structure Claude produced was too generic and did not account for the CQRS read-only constraint on the Azure side. I redesigned the module boundaries myself.</li>
+  </ul>
+
+  <!-- DECLARATION -->
+  <h2>Declaration</h2>
+  <div class="declaration">
+    <p>This is an accurate account of my AI usage on this project. All AI-assisted code was reviewed, tested, and where necessary corrected or rewritten by me before being committed. The architectural decisions, schema design, cross-cloud authentication approach, and integration testing were performed by me without AI assistance.</p>
+    <br>
+    <p><strong>Rachana Devi — 35102896</strong><br>8 June 2026</p>
+  </div>
+
+</div>
+</body>
+</html>
