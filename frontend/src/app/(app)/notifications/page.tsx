@@ -256,7 +256,7 @@ export default function NotificationsPage() {
             <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {[
                 { icon: '📤', title: 'Upload media', desc: 'A camera trap image or video is uploaded and processed by MegaDetector + SpeciesNet.' },
-                { icon: '🔍', title: 'Species detected', desc: 'When a species matching your subscription tag is detected with ≥ 80% confidence, an event is triggered.' },
+                { icon: '🔍', title: 'Species detected', desc: 'When the ML pipeline detects a species matching your subscription tag and stores it on the file, an event is triggered.' },
                 { icon: '📧', title: 'SNS email sent', desc: 'AWS SNS sends an email to your registered address with the detection details and thumbnail.' },
               ].map(({ icon, title, desc }) => (
                 <div key={title} style={{ display: 'flex', gap: '14px', padding: '14px', borderRadius: 'var(--r-md)', background: 'var(--sand-50)' }}>
