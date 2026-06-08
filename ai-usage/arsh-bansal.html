@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Usage Record — Arsh Bansal — FIT5225 Aussie EcoLens</title>
+<style>
+  :root {
+    --ink: #1a1d24;
+    --ink-soft: #444a55;
+    --ink-faint: #6f7785;
+    --line: #d6d9de;
+    --line-soft: #ebedf0;
+    --paper: #ffffff;
+    --bg: #f7f8fa;
+    --accent: #2f6e57;
+    --accent-soft: #e4f0eb;
+    --warn: #b54a3d;
+    --warn-soft: #fbe9e6;
+    --code-bg: #f1f3f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    padding: 32px 16px 80px;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 36px 44px 44px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  h1 {
+    font-size: 26px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  h1 + .subtitle {
+    color: var(--ink-faint);
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  h2 {
+    font-size: 19px;
+    margin: 36px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line-soft);
+    letter-spacing: -0.005em;
+  }
+  h3 {
+    font-size: 15px;
+    margin: 20px 0 8px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .header-card {
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin-bottom: 28px;
+  }
+  .header-card dl {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 6px 16px;
+    margin: 0;
+    font-size: 14px;
+  }
+  .header-card dt {
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .header-card dd { margin: 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 14px 0 20px;
+    font-size: 13.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  th {
+    background: var(--bg);
+    font-weight: 600;
+    border-bottom: 2px solid var(--line);
+    color: var(--ink-soft);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  td.commits {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .level {
+    display: inline-block;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .legend {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: 13.5px;
+  }
+  .legend dt {
+    font-weight: 700;
+    color: var(--accent);
+    font-family: "SF Mono", Menlo, monospace;
+    display: inline-block;
+    min-width: 32px;
+  }
+  .legend dd {
+    margin: 0 0 6px;
+    display: inline;
+  }
+  .legend dd::after { content: ""; display: block; }
+  .mistakes-card {
+    background: var(--warn-soft);
+    border: 1px solid var(--warn);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 12px 0 20px;
+  }
+  .mistakes-card h3 { color: var(--warn); margin-top: 0; }
+  .declaration {
+    margin-top: 40px;
+    padding: 20px 24px;
+    background: var(--bg);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-style: italic;
+    color: var(--ink-soft);
+  }
+  .declaration strong {
+    color: var(--ink);
+    font-style: normal;
+  }
+  .footer-meta {
+    margin-top: 36px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>AI Usage Record — Arsh Bansal</h1>
+<div class="subtitle">FIT5225 Assignment 2 · Aussie EcoLens (Multi-Cloud Wildlife Observation Platform)</div>
+
+<div class="header-card">
+  <dl>
+    <dt>Name</dt>           <dd>Arsh Bansal</dd>
+    <dt>Student ID</dt>     <dd>35104201</dd>
+    <dt>Email</dt>          <dd>arshb6564@gmail.com (personal) · aban0052@student.monash.edu (Monash)</dd>
+    <dt>Git author</dt>     <dd><code>aban0052 &lt;aban0052@student.monash.edu&gt;</code> · GitHub <code>arsh-bansal</code></dd>
+    <dt>Component owned</dt><dd>ML tagging pipeline, all backend Lambdas (Tagger / Thumbnail / Replicator / Notifier), Azure Query API, AWS infrastructure, frontend integration</dd>
+    <dt>Repository</dt>     <dd><code>github.com/arsh-bansal/aussie-ecolens</code></dd>
+    <dt>Generated</dt>      <dd>8 June 2026</dd>
+  </dl>
+</div>
+
+<h2>AI tools used</h2>
+
+<ul>
+  <li><strong>Claude Code (CLI)</strong> — primary tool. Used for code edits, multi-file refactors, terminal/git operations, AWS SAM deployments, and design discussions while building. Drove the bulk of the work in this final week.</li>
+  <li><strong>Claude / ChatGPT (web)</strong> — secondary. Used for one-off design questions, error message interpretation, and comparing approaches before committing to one (e.g., CQRS shape, Lambda packaging strategy).</li>
+  <li><strong>Cursor</strong> — tertiary. Used earlier in the project for inline edits and quick autocompletion when iterating on the Tagger Lambda's domain modules.</li>
+</ul>
+
+<h2>How I used AI</h2>
+
+<p>
+  Across the project my workflow was consistently <strong>Level 2 — I instructed, AI built</strong>. I chose the architecture, picked the libraries, defined the contracts (SAM templates, function signatures, data shapes), and then directed the AI step-by-step to implement them. I reviewed every diff, ran tests where they existed, and verified deployments end-to-end against the assignment spec and rubric. The AI accelerated typing and boilerplate; the design decisions, debugging strategy, and "why" remained mine.
+</p>
+
+<p>
+  The decisions I made independently and then asked the AI to implement include: choosing CQRS (AWS writes, Azure reads) over a single-cloud database; forcing CPU-only PyTorch to fit the Lambda container size limit; using EventBridge instead of direct S3 → Lambda triggers; aggregating video frame tags by MAX-per-species rather than SUM; using a sentinel filter policy to make SNS "unsubscribe-all" idempotent against email-client link prefetchers; and per-user (rather than global) SHA-256 deduplication.
+</p>
+
+<h3>Work-item breakdown</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Work item</th>
+      <th>Branch / area</th>
+      <th>Key commits</th>
+      <th>AI tool(s)</th>
+      <th>Autonomy</th>
+      <th>What I did</th>
+      <th>What the AI did</th>
+      <th>How verified</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <tr>
+      <td><strong>Tagger Lambda — ML pipeline</strong><br><span style="color:var(--ink-faint)">MegaDetector + SpeciesNet, layered architecture, structured logging, species taxonomy</span></td>
+      <td><code>feat/tagger-lambda-foundation</code></td>
+      <td class="commits">ee2957e, 992c4b4, 551475c, 5ce39e5, 7af0891, a15096b, bbae89d, 2bd4ff9, 88d4209</td>
+      <td>Claude Code, Cursor</td>
+      <td><span class="level">L2</span></td>
+      <td>Chose MegaDetector + SpeciesNet, designed the domain/services/handler split, picked dependencies, wrote the species taxonomy + Latin→common mapping, defined the typed config schema, ran ground-truth accuracy verification across 26 test images.</td>
+      <td>Wrote service classes, domain modules, and unit tests against the interfaces I specified.</td>
+      <td>Ran the multi-image accuracy test (commit <code>2bd4ff9</code>); compared output to the reference batch script; spot-checked species predictions manually.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Tagger Lambda packaging + Lambda deploy</strong><br><span style="color:var(--ink-faint)">CPU-only torch, Docker, S3 lazy model load, EventBridge wiring</span></td>
+      <td><code>feat/tagger-lambda-foundation</code></td>
+      <td class="commits">40d8b43, 916418e, 54c997f, d3e4053, 79f58c8, bc389a2, 3f970a8, 3432e17, 8ce5cbd</td>
+      <td>Claude Code</td>
+      <td><span class="level">L2</span></td>
+      <td>Diagnosed the 6.8 GB CUDA stack overrun and decided to force CPU-only torch; chose x86_64 over arm64 after a cpuinfo crash; designed the EventBridge decoupling; wrote the SAM template structure.</td>
+      <td>Produced the Dockerfile, pyproject extras filter, SAM YAML, and EventBridge rule definitions to my specification.</td>
+      <td><code>sam build</code> + <code>sam deploy</code> succeeded; tested cold-start latency; uploaded test images and verified tags persisted in DynamoDB.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Thumbnail Lambda</strong><br><span style="color:var(--ink-faint)">Pillow, aspect-ratio preserved, deterministic checksum keying</span></td>
+      <td><code>feat/tagger-lambda-foundation</code></td>
+      <td class="commits">461dff2</td>
+      <td>Claude Code</td>
+      <td><span class="level">L2</span></td>
+      <td>Decided to use Pillow over OpenCV (smaller container); designed the deterministic-key convention shared between Tagger and Thumbnail so the tag record can reference the thumbnail URL without a roundtrip.</td>
+      <td>Implemented the resize + JPEG-quality logic and the shared keys module.</td>
+      <td>Uploaded various aspect-ratio images and verified the longest-edge cap held and aspect ratio was preserved.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Replicator Lambda (CQRS)</strong><br><span style="color:var(--ink-faint)">DynamoDB Streams → Cosmos DB</span></td>
+      <td><code>feat/azure-query-api</code></td>
+      <td class="commits">e77a570, 541e0b6</td>
+      <td>Claude Code</td>
+      <td><span class="level">L2</span></td>
+      <td>Designed the CQRS topology (DynamoDB as system of record, Cosmos as read model); specified the stream-event handling contract; chose Cosmos document shape to match the API's query patterns.</td>
+      <td>Wrote the stream-record parsing and Cosmos upsert calls.</td>
+      <td>Uploaded files and watched Cosmos reflect the new records within ~1–2 seconds; tested with bulk-tag changes that the read model converged.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Notifier Lambda (SNS)</strong><br><span style="color:var(--ink-faint)">Species filter policies via message attributes</span></td>
+      <td><code>feat/azure-query-api</code></td>
+      <td class="commits">545b62c, 541e0b6</td>
+      <td>Claude Code</td>
+      <td><span class="level">L2</span></td>
+      <td>Decided to use SNS filter policies on a single topic (instead of per-species topics) so subscribers can refine their interests cheaply; specified that the species name on the SNS message attribute must match the canonical stored tag for exact-match filtering.</td>
+      <td>Implemented the stream-handler + SNS publish call.</td>
+      <td>Subscribed an email, triggered an upload with a matching species, confirmed receipt.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Video pipeline</strong><br><span style="color:var(--ink-faint)">1 fps frame extraction, MAX-per-species aggregation, poster thumbnails</span></td>
+      <td><code>feature/video-search-alerts-thumbnails</code></td>
+      <td class="commits">6281729, 382747f</td>
+      <td>Claude Code</td>
+      <td><span class="level">L2</span></td>
+      <td>Decided MAX-not-SUM aggregation (a lingering animal shouldn't inflate counts); chose to generate a poster thumbnail as a bonus over spec; sized the frame budget to fit Lambda timeout.</td>
+      <td>Wrote the cv2 frame iteration + aggregation helper.</td>
+      <td>Tagged several test videos; verified counts matched manual frame inspection.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Azure Query API — endpoints + species catalog</strong><br><span style="color:var(--ink-faint)">Search by tags/species/file/thumbnail, presign, dedup, SNS subscribe/unsubscribe</span></td>
+      <td><code>feat/azure-query-api</code>, <code>feat/global-tags-and-manage</code></td>
+      <td class="commits">d0948ec, ec7bd05, 1f1d30c, 449077a, 6dc8a20, 6c174d9, dbae939, e9eb0be, a8a3240, 99565cf</td>
+      <td>Claude Code, Cursor</td>
+      <td><span class="level">L2</span></td>
+      <td>Extended the scaffold; designed the canonical-name catalog and alias resolution so SNS exact-match filters work; decided per-user vs global dedup scope; specified the presigned-URL flow for video search-by-file; identified the apig-wsgi adapter as the right shim for HTTP API v2.</td>
+      <td>Wrote handler bodies, Cosmos queries with parameterised AND clauses, JWT verification helper.</td>
+      <td>Tested every endpoint against the assignment spec (§4.3) with Postman; deployed and ran the demo flow end-to-end.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Frontend integration</strong><br><span style="color:var(--ink-faint)">Search modal, thumbnail UI, dashboard live data, async tagging polling, video search-by-file</span></td>
+      <td><code>feature/auth-ui-polish</code>, <code>feature/video-search-alerts-thumbnails</code></td>
+      <td class="commits">6ea6c3f, e5e9284, 71be1e0, f39d66c, 83a1c94</td>
+      <td>Claude Code</td>
+      <td><span class="level">L2</span></td>
+      <td>Specified UX (full-size lightbox, copy-URL flow, async polling cadence); designed the dashboard aggregation to be live not mocked.</td>
+      <td>Implemented React components, API calls, state machines.</td>
+      <td>Manual browser testing against the deployed Azure Static Web App.</td>
+    </tr>
+
+    <tr>
+      <td><strong>Submission-week polish</strong><br><span style="color:var(--ink-faint)">Video thumbnail player, species dropdown on alerts, SNS sentinel fix, tag-count UI</span></td>
+      <td><code>feature/video-search-alerts-thumbnails</code></td>
+      <td class="commits">ceaaef7, edfc38b</td>
+      <td>Claude Code</td>
+      <td><span class="level">L2</span></td>
+      <td>Identified each issue (broken &lt;img&gt; for video URLs; missing species dropdown; resubscribe causing prefetcher auto-unsubscribe; needing N-count tag add); chose the smallest spec-compliant fix for each.</td>
+      <td>Wrote the patches across backend handlers and React pages.</td>
+      <td>Re-deployed Lambda; re-tested every search mode + alerts subscribe / unsubscribe / resubscribe; confirmed Manage page bulk-tag with count.</td>
+    </tr>
+
+  </tbody>
+</table>
+
+<h3>Autonomy legend</h3>
+<div class="legend">
+  <dl>
+    <dt>L1</dt> <dd>Human-led — I designed and wrote it; AI only autocompleted or answered the occasional question.</dd>
+    <dt>L2</dt> <dd>I instructed, AI built — I chose the approach and directed step by step; I reviewed and edited all output. <em>(My typical level across this project.)</em></dd>
+    <dt>L3</dt> <dd>AI-led, I supervised — AI proposed the design and wrote most of the code; I steered, corrected, verified.</dd>
+    <dt>L4</dt> <dd>AI-autonomous — AI made the decisions and produced the code with little direction; I mostly accepted it. <em>(Not used on this project.)</em></dd>
+  </dl>
+</div>
+
+<h2>Scope of work (reconciled with git)</h2>
+
+<ul>
+  <li><strong>Commits (non-merge):</strong> 51 under <code>aban0052</code> + 2 under <code>Arsh Bansal</code> = <strong>53 commits</strong></li>
+  <li><strong>Lines changed:</strong> +16,347 / −2,223 (net +14,124)</li>
+  <li><strong>Files touched:</strong> ~150 unique files</li>
+  <li><strong>Date range:</strong> 9 May 2026 (initial commit) to 8 June 2026 (submission day)</li>
+  <li><strong>Branches I authored:</strong> <code>feat/tagger-lambda-foundation</code>, <code>feat/azure-query-api</code>, <code>fix/CQRS-fix</code>, <code>fix/delete-thumbnail-iam</code>, <code>fix/Fix-thumbnail-image</code>, <code>fix/query-temp-autotag</code>, <code>fix/navbar-search</code>, <code>feat/global-tags-and-manage</code>, <code>feature/auth-ui-polish</code>, <code>update/readme</code>, <code>feature/video-search-alerts-thumbnails</code></li>
+  <li><strong>PRs opened:</strong> #1, #4, #5, #7, #8, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23</li>
+  <li><strong>Off-git work:</strong> initial Azure account setup and a small amount of AWS Console verification. AWS resources were provisioned in IaC (SAM template) — Adam owned the Cognito/auth-side console config.</li>
+</ul>
+
+<h2>Notable AI mistakes / limitations</h2>
+
+<div class="mistakes-card">
+  <h3>What I had to fix or override</h3>
+  <ul>
+    <li>
+      <strong>Edge cases missed on the happy path.</strong> The most common failure mode was AI-generated code that worked for the obvious case but broke on real data. Concrete examples I caught and fixed:
+      <ul style="margin-top:6px">
+        <li>Initial Tagger record shape didn't match the DynamoDB contract — found by integration test, fixed in <code>8ce5cbd</code>.</li>
+        <li>Tagger merge logic was overwriting the presigned-upload's seed record instead of updating it — fixed by switching to <code>update_item</code> with a merge expression (<code>5aba3bf</code>).</li>
+        <li>Delete handler initially only granted S3 access to the uploads bucket; thumbnails were left orphaned in the separate bucket — fixed in <code>ec7bd05</code>.</li>
+        <li>SNS "unsubscribe-from-all" was tearing down the subscription, which forced a fresh confirmation email on resubscribe — Gmail's link prefetcher then silently auto-unsubscribed the user. I caught this by trying to resubscribe and getting an unsubscribe confirmation email. Reworked to park the FilterPolicy on a sentinel value (commit <code>ceaaef7</code>).</li>
+        <li>Search-by-thumbnail UI rendered a video's poster thumbnail via an <code>&lt;img&gt;</code> tag, breaking when the underlying file was an MP4. Fixed by returning <code>file_type</code> from the backend and branching on it in the React component.</li>
+      </ul>
+    </li>
+    <li>
+      <strong>Over-engineering tendency.</strong> Several early AI suggestions added abstractions I didn't need (factory wrappers around boto3 clients, multi-class state machines for simple polling). I pushed back on these and kept implementations flat where complexity wasn't justified.
+    </li>
+    <li>
+      <strong>Container size / Lambda limit awareness.</strong> The AI did not anticipate that the default PyTorch wheel pulls 6.8 GB of CUDA libraries — I diagnosed the size overrun by running <code>du -sh</code> on the Docker image layers, then directed the fix to install <code>torch+cpu</code> from the dedicated index URL (<code>40d8b43</code>).
+    </li>
+  </ul>
+</div>
+
+<h2>Declaration</h2>
+
+<div class="declaration">
+  <p><strong>This is an accurate account of my AI usage on this project.</strong> I used Claude Code, Claude/ChatGPT web, and Cursor as productivity tools at Level 2 (I instructed, AI built). I designed the architecture and made the engineering decisions; the AI accelerated implementation. I reviewed, tested, and verified every change before it landed. Where the AI got things wrong, I caught the issues and fixed them. Every claim in this document can be traced to a git commit or to my own description of off-git work.</p>
+  <p style="margin-top:14px; font-style:normal; color:var(--ink)">
+    <strong>Arsh Bansal · 35104201 · 8 June 2026</strong>
+  </p>
+</div>
+
+<div class="footer-meta">
+  Generated 8 June 2026 from git history (<code>git log --author=aban0052</code>) and direct authorship questions.
+  Repository: <code>github.com/arsh-bansal/aussie-ecolens</code>.
+</div>
+
+</main>
+</body>
+</html>
