@@ -30,6 +30,9 @@ def video_handler_mod(monkeypatch):
             return 1
 
     class _FakeDB:
+        def __init__(self, *a, **k):
+            pass
+
         def put_tag_result(self, result):
             raise AssertionError("must not persist query-temp uploads")
 

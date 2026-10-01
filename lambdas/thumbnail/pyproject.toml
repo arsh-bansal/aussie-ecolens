@@ -17,9 +17,9 @@ classifiers = [
 dependencies = [
     "boto3>=1.43.12",
     "pydantic>=2.7",
-    "pydantic-settings>=2.14.1",
+    "pydantic-settings>=2.14.2",
     "structlog>=25.5.0",
-    "pillow>=10.4",
+    "pillow>=12.3.0",
 ]
 
 [dependency-groups]

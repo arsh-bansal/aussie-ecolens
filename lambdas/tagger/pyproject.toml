@@ -17,12 +17,12 @@ classifiers = [
 dependencies = [
     "boto3>=1.43.12",
     "megadetector==10.0.20",
-    "onnx>=1.16",
+    "onnx>=1.23.1",
     "onnx2torch>=1.5",
     "opencv-python-headless>=4.13.0.92",
-    "pillow>=12.2.0",
+    "pillow>=12.3.0",
     "pydantic>=2.7",
-    "pydantic-settings>=2.14.1",
+    "pydantic-settings>=2.14.2",
     "pyyaml>=6.0.3",
     "structlog>=25.5.0",
     # torch and torchvision are pulled transitively via megadetector, but
@@ -32,11 +32,11 @@ dependencies = [
     # Hopper systems — Lambda Graviton2 has no GPU, so we explicitly opt
     # into the CPU-only build via [tool.uv.sources] below.
     #
-    # Pinned to 2.12.x because that's our validated combo (smoke test
-    # 100% on 26 ground-truth images). Bumping the minor requires
-    # re-running the smoke test.
-    "torch>=2.12,<2.13",
-    "torchvision>=0.27,<0.28",
+    # The 2.13 line includes the patched PyTorch export implementation.
+    # The previous 2.12 combo passed all 26 ground-truth images; this minor
+    # update must pass smoke_test.py with those models/images before release.
+    "torch>=2.13,<2.14",
+    "torchvision>=0.28,<0.29",
     "tqdm>=4.67.3",
 ]
 
